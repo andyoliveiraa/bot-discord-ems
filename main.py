@@ -1,7 +1,46 @@
 import os
 import signal
 import sys
+import subprocess
+import time
 
+if "--run-bot" not in sys.argv:
+    # --- WATCHER ---
+    WATCHER_LOCK = "watcher.lock"
+    if os.path.exists(WATCHER_LOCK):
+        try:
+            with open(WATCHER_LOCK, "r") as f:
+                old_pid = int(f.read().strip())
+            output = os.popen(f'tasklist /FI "PID eq {old_pid}"').read()
+            if "python" in output.lower():
+                os.kill(old_pid, signal.SIGTERM)
+        except Exception:
+            pass
+
+    with open(WATCHER_LOCK, "w") as f:
+        f.write(str(os.getpid()))
+
+    while True:
+        print("[SISTEMA] Iniciando processo do bot...")
+        process = subprocess.Popen([sys.executable, sys.argv[0], "--run-bot"])
+        try:
+            process.wait()
+        except KeyboardInterrupt:
+            print("[SISTEMA] Interrompido pelo usuário.")
+            process.terminate()
+            break
+        
+        if process.returncode == 0:
+            print("[SISTEMA] Bot encerrado.")
+            break
+        else:
+            print(f"[SISTEMA] O bot foi encerrado de forma anormal (Erro {process.returncode}). Reiniciando em 5 segundos...")
+            with open("crashed.txt", "w") as f:
+                f.write("crash")
+            time.sleep(5)
+    sys.exit(0)
+
+# --- BOT CODE ---
 LOCK_FILE = "bot.lock"
 if os.path.exists(LOCK_FILE):
     try:
@@ -54,6 +93,18 @@ async def att_status():
 @client.event
 async def on_ready():
     print('Bot está online!')
+    
+    if os.path.exists("crashed.txt"):
+        try:
+            dono_id = config.get("owner_id")
+            if dono_id:
+                dono = await client.fetch_user(dono_id)
+                agora = datetime.now(pytz.timezone(config['timezone'])).strftime("%d/%m/%Y %H:%M:%S")
+                await dono.send(f"⚠️ **AVISO DO SISTEMA** ⚠️\nO bot encontrou um erro crítico e foi **reiniciado automaticamente** em `{agora}`.")
+            os.remove("crashed.txt")
+        except Exception as e:
+            print("Erro ao enviar aviso de reinício:", e)
+
     await att_status()
 
 @client.event
