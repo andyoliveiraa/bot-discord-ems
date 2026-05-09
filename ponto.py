@@ -11,6 +11,12 @@ db = Database('db.sqlite3')
 config = get_configs()
 
 active_pontos = {}
+ACTIVE_PONTOS_FILE = "active_pontos.json"
+
+def save_active_pontos():
+    import json
+    with open(ACTIVE_PONTOS_FILE, "w") as f:
+        json.dump(active_pontos, f)
 
 class PicaPonto(commands.Cog):
     def __init__(self, client):
@@ -37,6 +43,7 @@ class PicaPonto(commands.Cog):
                 if estado["status"] == "pausado":
                     estado["pausas"].append([estado["inicio_pausa"], agora])
                 active_pontos.pop(user_id)
+                save_active_pontos()
                 
                 await db.create_registry(int(user_id), horario_inicio, agora, True, 0, json.dumps(estado["pausas"]))
                 
@@ -94,6 +101,60 @@ class PicaPonto(commands.Cog):
     async def on_ready(self):
         print('Pica-Ponto carregado com sucesso!')
         self.client.add_view(view=finalizarPonto())
+        await self.fechar_pontos_pendentes()
+
+    async def fechar_pontos_pendentes(self):
+        import os
+        if not os.path.exists(ACTIVE_PONTOS_FILE):
+            return
+            
+        try:
+            with open(ACTIVE_PONTOS_FILE, "r") as f:
+                pontos_pendentes = json.load(f)
+        except Exception:
+            return
+            
+        if not pontos_pendentes:
+            return
+            
+        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        canal_log = self.client.get_channel(config["log_channel_id"])
+        
+        for user_id_str, estado in pontos_pendentes.items():
+            user_id = int(user_id_str)
+            if estado["status"] == "pausado":
+                estado["total_pausa"] += agora - estado["inicio_pausa"]
+                estado["pausas"].append([estado["inicio_pausa"], agora])
+            
+            horario_inicio = estado["inicio"]
+            segundos_totais = agora - horario_inicio - estado["total_pausa"]
+            if segundos_totais < 0: segundos_totais = 0
+            
+            await db.add_time(user_id, segundos_totais)
+            pauses_json = json.dumps(estado["pausas"])
+            await db.create_registry(user_id, horario_inicio, agora, True, segundos_totais, pauses_json)
+            
+            if canal_log:
+                horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
+                data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+                user = self.client.get_user(user_id)
+                user_mention = user.mention if user else f"<@{user_id}>"
+                
+                embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado Automático (Crash/Restart)**\n**→ `Funcionário`: {user_mention}**\n'
+                    f'**→ `Horário de Abertura`: {data_abertura}**\n'
+                    f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
+                    f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**', colour=discord.Colour.orange())
+                embed_log.set_author(name='LOG: Pica-Ponto fechado pelo Sistema', icon_url=self.client.user.display_avatar)
+                try:
+                    await canal_log.send(embed=embed_log)
+                except Exception:
+                    pass
+                    
+        try:
+            os.remove(ACTIVE_PONTOS_FILE)
+        except:
+            pass
+        active_pontos.clear()
 
     @commands.slash_command(description='[ADM] Adiciona horas/minutos para uma pessoa no pica-ponto', contexts={discord.InteractionContextType.guild})
     @commands.has_any_role(config['staff_role_id'])
@@ -357,6 +418,7 @@ class PicaPonto(commands.Cog):
         await ctx.respond("✅ Pica-Ponto iniciado com sucesso!", ephemeral=True)
         msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
         active_pontos[ctx.user.id]["msg_id"] = msg.id
+        save_active_pontos()
 
 
 class finalizarPonto(View):
@@ -391,6 +453,8 @@ class finalizarPonto(View):
             button.emoji = "⏸️"
             button.style = discord.ButtonStyle.secondary
             await inter.response.defer()
+
+        save_active_pontos()
 
         horario_inicio = estado["inicio"]
         display_horario = horario_inicio + estado["total_pausa"]
@@ -441,6 +505,7 @@ class finalizarPonto(View):
                             if segundos_totais < 0: segundos_totais = 0
                             horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
                             active_pontos.pop(user_id)
+                            save_active_pontos()
                             
                             user = inter.guild.get_member(int(user_id))
                             import json
@@ -488,6 +553,7 @@ class finalizarPonto(View):
         if segundos_totais < 0: segundos_totais = 0
         horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
         active_pontos.pop(inter.user.id)
+        save_active_pontos()
 
         await db.add_time(inter.user.id, segundos_totais)
         
