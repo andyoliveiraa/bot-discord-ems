@@ -1,4 +1,4 @@
-aiosqlite
-audioop-lts
-py-cord
-pytz
+py-cord>=2.7.2
+aiosqlite>=0.22.1
+pytz>=2026.2
+aiohttp>=3.13.5
