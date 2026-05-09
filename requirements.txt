@@ -1,0 +1,4 @@
+aiosqlite
+audioop-lts
+py-cord
+pytz

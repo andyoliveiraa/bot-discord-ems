@@ -1,0 +1,619 @@
+import datetime
+import discord
+from discord.commands import Option
+from discord.ext import commands, tasks
+from discord.ui import View, InputText, Modal
+from pytz import timezone
+import json
+from db import Database, get_configs
+
+db = Database('db.sqlite3')
+config = get_configs()
+
+active_pontos = {}
+
+class PicaPonto(commands.Cog):
+    def __init__(self, client):
+        self.client = client
+        self.auto_close_task.start()
+
+    def cog_unload(self):
+        self.auto_close_task.cancel()
+
+    @tasks.loop(minutes=5)
+    async def auto_close_task(self):
+        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        for user_id, estado in list(active_pontos.items()):
+            if agora - estado["inicio"] >= 86400: # 24 horas inativo
+                horario_inicio = estado["inicio"]
+                user = self.client.get_user(user_id)
+                if user is None:
+                    for guild in self.client.guilds:
+                        user = guild.get_member(user_id)
+                        if user: break
+                
+                if estado["status"] == "pausado":
+                    estado["pausas"].append([estado["inicio_pausa"], agora])
+                active_pontos.pop(user_id)
+                
+                await db.create_registry(int(user_id), horario_inicio, agora, True, 0, json.dumps(estado["pausas"]))
+                
+                canal_log = self.client.get_channel(config["log_channel_id"])
+                if canal_log and user:
+                    data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+                    embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado Automaticamente (24h Inatividade)** *(horas não contabilizadas)*\n**→ `Funcionário`: {user.mention}**\n'
+                        f'**→ `Horário de Abertura`: {data_abertura}**\n'
+                        f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n**→ `Tempo total de serviço`: 00 horas e 00 minutos**', colour=discord.Colour.dark_gray())
+                    embed_log.set_author(name='LOG: Inatividade Detectada', icon_url=self.client.user.display_avatar)
+                    await canal_log.send(embed=embed_log)
+                    try:
+                        await user.send(f'**<:aviso:1269036173381206132> AVISO:** Seu pica-ponto foi finalizado automaticamente por exceder 24 horas de inatividade!\n<:sirene:1269032464374829087> Suas horas não foram contabilizadas.')
+                    except: pass
+
+    @auto_close_task.before_loop
+    async def before_auto_close_task(self):
+        await self.client.wait_until_ready()
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        print('Pica-Ponto carregado com sucesso!')
+        self.client.add_view(view=finalizarPonto())
+
+    @commands.slash_command(description='[ADM] Adiciona horas/minutos para uma pessoa no pica-ponto', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def addtempo(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True),
+                    horas: Option(int, "Digite a quantidade de horas", required=True, min_value=0),
+                    minutos: Option(int, "Digite a quantidade de minutos", required=True, min_value=0, max_value=59),
+                    motivo: Option(str, "Digite o motivo da adição de horas (Ficará em exibição no log)", required=True)):
+
+        total = (int(horas) * 3600) + (int(minutos) * 60)
+        await db.add_time(usuario.id, total)
+
+        await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você adicionou `{horas}` horas e `{minutos}` minutos para {usuario.mention}.')
+        try:
+            await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você sofreu uma alteração nas horas trabalhadas!\n**→ Staff:** {ctx.author.mention}\n**→ Adicionou:** {horas} hora(s) e {minutos} minuto(s)\n**→ Motivo:** {motivo}\n\n`Em caso de problemas ou dúvidas, questione o staff mencionado acima.`')
+        except (discord.HTTPException, discord.Forbidden):
+            pass
+        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
+            f'**→ `Horas adicionadas`: {horas} horas e {minutos} minutos**\n**→ `Motivo inserido`: {motivo}**', colour=discord.Colour.purple())
+
+        embed_log.set_author(name='LOG: Adição de Horas', icon_url=self.client.user.display_avatar)
+        await canal_log.send(embed=embed_log)
+
+
+    @commands.slash_command(description='[ADM] Remove horas/minutos de uma pessoa no pica-ponto', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def deltempo(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True),
+                    horas: Option(int, "Digite a quantidade de horas", required=True, min_value=0),
+                    minutos: Option(int, "Digite a quantidade de minutos", required=True, min_value=0, max_value=59),
+                    motivo: Option(str, "Digite o motivo da remoção de horas (Ficará em exibição no log)", required=True)):
+
+        total = (int(horas) * 3600) + (int(minutos) * 60)
+        await db.del_time(usuario.id, total)
+
+        await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você removeu `{horas}` horas e `{minutos}` minutos de {usuario.mention}.')
+        try:
+            await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você sofreu uma alteração nas horas trabalhadas!\n**→ Staff:** {ctx.author.mention}\n**→ Removeu:** {horas} hora(s) e {minutos} minuto(s)\n**→ Motivo:** {motivo}\n\n`Em caso de problemas ou dúvidas, questione o staff mencionado acima.`')
+        except (discord.HTTPException, discord.Forbidden):
+            pass
+            
+        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
+            f'**→ `Horas removidas`: {horas} horas e {minutos} minutos**\n**→ `Motivo inserido`: {motivo}**', colour=discord.Colour.purple())
+
+        embed_log.set_author(name='LOG: Remoção de Horas', icon_url=self.client.user.display_avatar)
+        await canal_log.send(embed=embed_log)
+
+
+    @commands.slash_command(description='[ADM] Reseta as horas do pica-ponto de um determinado usuário', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def resetar_usuario(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True)):
+
+        await db.set_time(usuario.id, 0)
+        await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você resetou as horas de {usuario.mention}.')
+        
+        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
+            f'**→ O(A) funcionário(a) acima teve todas as suas horas de pica-ponto resetadas.**', colour=discord.Colour.red())
+
+        embed_log.set_author(name='LOG: Reset de Horas', icon_url=self.client.user.display_avatar)
+        await canal_log.send(embed=embed_log)
+
+    @commands.slash_command(description='[ADM] Configura para 0 horas e apaga os dados de todos os usuários registrados.', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def resetar_todos(self, ctx: discord.ApplicationContext):
+
+        await ctx.respond(view=BotoesReset())
+
+    @commands.slash_command(description='[ADM] Retorna o ranking das top 10 pessoas com mais horas na semana.', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def ranking(self, ctx: discord.ApplicationContext):
+
+        top10 = await db.get_ranking()
+        
+        embed = discord.Embed(title='🏆 Ranking Semanal (TOP 10)', color=discord.Colour.gold())
+        for index, user in enumerate(top10):
+            horas, minutos = int(user[1] // 3600), int((user[1] % 3600) // 60)
+            
+            embed.add_field(name=f'{index+1}º Lugar', value=f'<@{user[0]}> - `{horas}h:{minutos}m`', inline=False)
+            
+        await ctx.respond(embed=embed)
+
+    @commands.slash_command(name='semana', description='[ADM] Mostra o relatório semanal de horas e envia backup.', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def semana(self, ctx: discord.ApplicationContext):
+        top_todos = await db.get_ranking(amount=100)
+        # Filtrar apenas quem tem o cargo ponto_role_id
+        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        top_filtrado = [u for u in top_todos if cargo_ponto and ctx.guild.get_member(u[0]) and cargo_ponto in ctx.guild.get_member(u[0]).roles]
+        agora_str = datetime.datetime.now(timezone(config['timezone'])).strftime('%d/%m/%Y \u00e0s %H:%M')
+
+        embed_confirmar = discord.Embed(
+            title='\U0001f4ca Relatório Semanal',
+            description=(
+                f'**Staff:** {ctx.author.mention}\n'
+                f'**Data/Hora:** `{agora_str}`\n\n'
+                '**As seguintes acções serão executadas após confirmar:**\n\n'
+                '\U0001f4ca **1.** Relatório com as horas de **todos os funcionários com cargo de ponto** será exibido no canal\n'
+                '\U0001f4be **2.** Um backup do ficheiro `db.sqlite3` será enviado no canal\n\n'
+                '> ℹ️ Os dados **não serão apagados** — usa `/resetarsemana` para isso.'
+            ),
+            color=discord.Colour.blue()
+        )
+        embed_confirmar.set_footer(text='Tens 30 segundos para confirmar.')
+        await ctx.respond(embed=embed_confirmar, view=BotoesSemana(top_filtrado, reset=False), ephemeral=True)
+
+    @commands.slash_command(name='resetarsemana', description='[ADM] Encerra a semana: mostra relatório, backup e reseta tudo.', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def resetarsemana(self, ctx: discord.ApplicationContext):
+        top_todos = await db.get_ranking(amount=100)
+        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        top_filtrado = [u for u in top_todos if cargo_ponto and ctx.guild.get_member(u[0]) and cargo_ponto in ctx.guild.get_member(u[0]).roles]
+        agora_str = datetime.datetime.now(timezone(config['timezone'])).strftime('%d/%m/%Y \u00e0s %H:%M')
+
+        embed_confirmar = discord.Embed(
+            title='\u26a0\ufe0f Encerramento Semanal',
+            description=(
+                f'**Staff:** {ctx.author.mention}\n'
+                f'**Data/Hora:** `{agora_str}`\n\n'
+                '**As seguintes acções serão executadas após confirmar:**\n\n'
+                '\U0001f4ca **1.** Relatório com as horas de **todos os funcionários com cargo de ponto** será exibido no canal\n'
+                '\U0001f4be **2.** Um backup do ficheiro `db.sqlite3` será enviado no canal\n'
+                '\U0001f504 **3.** Todos os tempos e registos serão **resetados para zero**\n\n'
+                '> \u274c Esta acção **não pode ser desfeita!**'
+            ),
+            color=discord.Colour.orange()
+        )
+        embed_confirmar.set_footer(text='Tens 30 segundos para confirmar.')
+        await ctx.respond(embed=embed_confirmar, view=BotoesSemana(top_filtrado, reset=True), ephemeral=True)
+
+
+    @commands.slash_command(name="pontosreg", description='Verifica todo os pica-pontos salvos na base de dados de uma pessoa.', contexts={discord.InteractionContextType.guild}, default_member_permissions=None)
+    async def consultar_ponto(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=False)):
+        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        if cargo_ponto not in ctx.author.roles:
+            return await ctx.respond('❌ Não tens permissão para usar este comando.', ephemeral=True)
+        if usuario is None:
+            usuario = ctx.author
+            
+        dados = await db.get_all_user_registries(usuario.id)
+        if not dados:
+            return await ctx.respond('❌ Este usuário ainda não possui nenhum registro salvo.', ephemeral=True)
+
+        registros_por_dia = {}
+        total_semana_segundos = 0
+
+        for k in dados:
+            hr_inicio = datetime.datetime.fromtimestamp(k[0], timezone(config["timezone"])).strftime("%H:%M")
+            hr_fim = datetime.datetime.fromtimestamp(k[1], timezone(config["timezone"])).strftime("%H:%M")
+            data_str = datetime.datetime.fromtimestamp(k[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
+            
+            staff = True if k[2] == 1 else False
+            duracao = k[3]
+            pausas_str = k[4] if len(k) > 4 else '[]'
+            try:
+                pausas = json.loads(pausas_str)
+            except:
+                pausas = []
+
+            hr = str(duracao // 3600).zfill(2)
+            mins = str((duracao % 3600) // 60).zfill(2)
+            
+            total_semana_segundos += duracao
+
+            if data_str not in registros_por_dia:
+                registros_por_dia[data_str] = []
+                
+            registros_por_dia[data_str].append(f'🟢 `{hr_inicio}` → `{hr_fim}`  **({hr}h {mins}m)**{"  🟡" if staff else ""}')
+            for p in pausas:
+                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%H:%M")
+                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+                registros_por_dia[data_str].append(f'  ╰ ⏸️ Pausa: `{p_in}` → Volta: `{p_out}`')
+
+        hr_total = str(total_semana_segundos // 3600).zfill(2)
+        mins_total = str((total_semana_segundos % 3600) // 60).zfill(2)
+        
+        embed = discord.Embed(
+            title='📋 Registros de Pica-Ponto',
+            description=f'Funcionário: {usuario.mention}\n⏱️ **Tempo Total na Semana: `{hr_total}h {mins_total}m`**',
+            color=discord.Colour.yellow()
+        )
+        embed.set_thumbnail(url=usuario.display_avatar)
+        
+        for dia, regs in registros_por_dia.items():
+            campo_valor = ''
+            for r in regs:
+                campo_valor += r + '\n'
+            if len(campo_valor) > 1024:
+                campo_valor = campo_valor[:1020] + '...'
+            embed.add_field(name=f'📅 {dia}', value=campo_valor.strip(), inline=False)
+        
+        embed.set_footer(text='🟡 = Fechado por staff  |  Horários no fuso configurado')
+        await ctx.respond(embed=embed, ephemeral=True)
+
+
+    @commands.slash_command(description='[DEV] Faz um backup local na máquina do dev.', contexts={discord.InteractionContextType.guild})
+    async def backup(self, ctx: discord.ApplicationContext):
+        if ctx.user.id == config["owner_id"]:
+            await ctx.reply(content='Backup atual:', file=discord.File('db.sqlite3'))
+        else:
+            await ctx.reply('❌ ERRO! Comando disponível apenas para desenvolvedores.')
+
+    @commands.slash_command(name="ponto", description='Inicia o seu pica-ponto', contexts={discord.InteractionContextType.guild}, default_member_permissions=None)
+    async def bateponto(self, ctx: discord.ApplicationContext):
+        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        if cargo_ponto not in ctx.author.roles:
+            return await ctx.respond('❌ Não tens permissão para usar o pica-ponto.', ephemeral=True)
+        if ctx.user.id in active_pontos:
+            estado = active_pontos[ctx.user.id]
+            try:
+                old_msg = await ctx.channel.fetch_message(estado["msg_id"])
+                await old_msg.delete()
+            except: pass
+            
+            horario_inicio = estado["inicio"]
+            display_horario = horario_inicio + estado["total_pausa"]
+            desc = f'**→ <:busts_in_silhouette:1269035235463397397> Funcionário:** {ctx.user.mention}\n\n'
+            
+            if estado["status"] == "pausado":
+                trabalhado = estado["inicio_pausa"] - horario_inicio - estado["total_pausa"]
+                h, m = int(trabalhado // 3600), int((trabalhado % 3600) // 60)
+                desc += f'**→ <:alarm_clock:1269034530388574309> Tempo Trabalhado:** `{h}h:{m}m` (Pausado)\n\n'
+            else:
+                desc += f'**→ <:alarm_clock:1269034530388574309> Iniciado em:** <t:{horario_inicio}> (<t:{display_horario}:R>)\n\n'
+                
+            desc += '**❗ Quando encerrar o seu serviço, encerre o pica-ponto no botão abaixo**\n'
+            
+            for p in estado["pausas"]:
+                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%H:%M")
+                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+                desc += f'\n**⏸️ Pausa:** `{p_in}` **▶️ Volta:** `{p_out}`'
+                
+            if estado["status"] == "pausado":
+                p_in = datetime.datetime.fromtimestamp(estado["inicio_pausa"], timezone(config["timezone"])).strftime("%H:%M")
+                desc += f'\n**⏸️ Pausa:** `{p_in}` *(Em andamento...)*'
+                
+            embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
+            embed.set_author(name=f'Pica-Ponto de {ctx.user}', icon_url=ctx.user.display_avatar)
+            embed.set_footer(text=f'{config["server_name"]} • 2024')
+            
+            msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
+            estado["msg_id"] = msg.id
+            return await ctx.respond("✅ Seu painel de pica-ponto foi atualizado neste canal!", ephemeral=True)
+            
+        horario = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        active_pontos[ctx.user.id] = {
+            "inicio": horario,
+            "msg_id": None,
+            "status": "ativo",
+            "inicio_pausa": 0,
+            "total_pausa": 0,
+            "pausas": []
+        }
+
+        embed = discord.Embed(description=f'**→ <:busts_in_silhouette:1269035235463397397> Funcionário:** {ctx.user.mention}\n\n'
+                              f'**→ <:alarm_clock:1269034530388574309> Iniciado em:** <t:{horario}> (<t:{horario}:R>)\n\n'
+                              '**❗ Quando encerrar o seu serviço, encerre o pica-ponto no botão abaixo**',
+                              color=discord.Colour.green())
+        embed.set_author(name=f'Pica-Ponto de {ctx.user}', icon_url=ctx.user.display_avatar)
+        embed.set_footer(text=f'{config["server_name"]} • 2024')
+        
+        await ctx.respond("✅ Pica-Ponto iniciado com sucesso!", ephemeral=True)
+        msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
+        active_pontos[ctx.user.id]["msg_id"] = msg.id
+
+
+class finalizarPonto(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label='Pausar', emoji='⏸️', style=discord.ButtonStyle.secondary, custom_id="button_pause")
+    async def pause_callback(self, button, inter: discord.Interaction):
+        if inter.user.id not in active_pontos:
+            return await inter.response.send_message("❌ Seu pica-ponto expirou ou o bot foi reiniciado. Inicie um novo!", ephemeral=True)
+        if active_pontos[inter.user.id]["msg_id"] != inter.message.id:
+            return await inter.response.send_message("❌ Este não é o seu painel ativo mais recente.", ephemeral=True)
+            
+        estado = active_pontos[inter.user.id]
+        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        
+        if estado["status"] == "ativo":
+            estado["status"] = "pausado"
+            estado["inicio_pausa"] = agora
+            button.label = "Retomar"
+            button.emoji = "▶️"
+            button.style = discord.ButtonStyle.success
+            await inter.response.defer()
+        else:
+            estado["status"] = "ativo"
+            duracao_pausa = agora - estado["inicio_pausa"]
+            estado["total_pausa"] += duracao_pausa
+            estado["pausas"].append([estado["inicio_pausa"], agora])
+            estado["inicio_pausa"] = 0
+            
+            button.label = "Pausar"
+            button.emoji = "⏸️"
+            button.style = discord.ButtonStyle.secondary
+            await inter.response.defer()
+
+        horario_inicio = estado["inicio"]
+        display_horario = horario_inicio + estado["total_pausa"]
+        
+        desc = f'**→ <:busts_in_silhouette:1269035235463397397> Funcionário:** {inter.user.mention}\n\n'
+        
+        if estado["status"] == "pausado":
+            trabalhado = estado["inicio_pausa"] - horario_inicio - estado["total_pausa"]
+            h, m = int(trabalhado // 3600), int((trabalhado % 3600) // 60)
+            desc += f'**→ <:alarm_clock:1269034530388574309> Tempo Trabalhado:** `{h}h:{m}m` (Pausado)\n\n'
+        else:
+            desc += f'**→ <:alarm_clock:1269034530388574309> Iniciado em:** <t:{horario_inicio}> (<t:{display_horario}:R>)\n\n'
+            
+        desc += '**❗ Quando encerrar o seu serviço, encerre o pica-ponto no botão abaixo**\n'
+        
+        for p in estado["pausas"]:
+            p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%H:%M")
+            p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+            desc += f'\n**⏸️ Pausa:** `{p_in}` **▶️ Volta:** `{p_out}`'
+            
+        if estado["status"] == "pausado":
+            p_in = datetime.datetime.fromtimestamp(estado["inicio_pausa"], timezone(config["timezone"])).strftime("%H:%M")
+            desc += f'\n**⏸️ Pausa:** `{p_in}` *(Em andamento...)*'
+            
+        novo_embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
+        novo_embed.set_author(name=f'Pica-Ponto de {inter.user}', icon_url=inter.user.display_avatar)
+        novo_embed.set_footer(text=f'{config["server_name"]} • 2024')
+        
+        await inter.message.edit(embed=novo_embed, view=self)
+
+    @discord.ui.button(label='Finalizar', emoji='⏹', style=discord.ButtonStyle.danger, custom_id="button_end")
+    async def end_callback(self, button, inter: discord.Interaction):
+        cargo_adm = inter.guild.get_role(config["staff_role_id"])
+        
+        if cargo_adm in inter.user.roles:
+            for user_id, estado in list(active_pontos.items()):
+                if estado["msg_id"] == inter.message.id:
+                    if inter.user.id != user_id:
+                        try:
+                            horario_atual = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+                            if estado["status"] == "pausado":
+                                duracao_pausa = horario_atual - estado["inicio_pausa"]
+                                estado["total_pausa"] += duracao_pausa
+                                estado["pausas"].append([estado["inicio_pausa"], horario_atual])
+                                
+                            horario_inicio = estado["inicio"]
+                            segundos_totais = horario_atual - horario_inicio - estado["total_pausa"]
+                            if segundos_totais < 0: segundos_totais = 0
+                            horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
+                            active_pontos.pop(user_id)
+                            
+                            user = inter.guild.get_member(int(user_id))
+                            import json
+                            pauses_json = json.dumps(estado["pausas"])
+                            await db.create_registry(int(user_id), horario_inicio, horario_atual, True, segundos_totais, pauses_json)
+                            
+                            canal_log = inter.guild.get_channel(config["log_channel_id"])
+                            data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+                            pausas_desc = ''
+                            for p in estado["pausas"]:
+                                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")
+                                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+                                pausas_desc += f'\n**→ `Pausa`: {p_in} \u2192 Volta: {p_out}**'
+                            embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado por {inter.user.mention}** *(horas não contabilizadas)*\n**→ `Funcionário`: {user.mention}**\n'
+                                f'**→ `Horário de Abertura`: {data_abertura}**\n'
+                                f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
+                                f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**'
+                                + pausas_desc, colour=discord.Colour.yellow())
+                            embed_log.set_author(name='LOG: Pica-Ponto fechado por Alto Comando/Staff', icon_url=inter.user.display_avatar)
+                            await canal_log.send(embed=embed_log)
+                            await user.send(f'**<:aviso:1269036173381206132> AVISO:** Seu pica-ponto foi finalizado por: {inter.user.mention}!\n<:sirene:1269032464374829087>Tome cuidado em deixar o pica-ponto aberto ao sair de serviço. Em caso de dúvidas, procure o responsável por ter finalizado o seu ponto.\n> <:relogio:1269034530388574309> Tempo com pica-ponto aberto: **`{str(horas).zfill(2)} horas`** e **`{str(minutos).zfill(2)} minutos`**\n**`OBS`:** Suas horas não foram contabilizadas.')
+                        except Exception as e:
+                            print(e)
+                        await inter.message.delete()
+                        return await inter.response.send_message('<a:check:1269034091882221710> **Pica-ponto finalizado!** As horas não foram contabilizadas.', ephemeral=True)
+                    break
+                    
+        if inter.user.id not in active_pontos:
+            return await inter.response.send_message("❌ Seu pica-ponto expirou ou o bot foi reiniciado. Inicie um novo!", ephemeral=True)
+        if inter.message.id != active_pontos[inter.user.id]["msg_id"]:
+            return await inter.response.send_message("❌ Este não é o seu painel ativo mais recente.", ephemeral=True)
+
+        estado = active_pontos[inter.user.id]
+        
+        await inter.message.delete()
+
+        horario_atual = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        if estado["status"] == "pausado":
+            duracao_pausa = horario_atual - estado["inicio_pausa"]
+            estado["total_pausa"] += duracao_pausa
+            estado["pausas"].append([estado["inicio_pausa"], horario_atual])
+
+        horario_inicio = estado["inicio"]
+        segundos_totais = horario_atual - horario_inicio - estado["total_pausa"]
+        if segundos_totais < 0: segundos_totais = 0
+        horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
+        active_pontos.pop(inter.user.id)
+
+        await db.add_time(inter.user.id, segundos_totais)
+        
+        import json
+        pauses_json = json.dumps(estado["pausas"])
+        await db.create_registry(inter.user.id, horario_inicio, horario_atual, False, segundos_totais, pauses_json)
+
+        await inter.response.send_message(f'⏰ **Serviço finalizado!**\n⏰ Tempo total de serviço: `{horas}` horas e `{minutos}` minutos', ephemeral=True)
+
+        canal_log = inter.guild.get_channel(config["log_channel_id"])
+
+        data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+        pausas_desc = ''
+        for p in estado["pausas"]:
+            p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")
+            p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+            pausas_desc += f'\n**→ `Pausa`: {p_in} \u2192 Volta: {p_out}**'
+        embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado**\n**→ `Funcionário`: {inter.user.mention}**\n'
+            f'**→ `Horário de Abertura`: {data_abertura}**\n'
+            f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
+            f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**'
+            + pausas_desc,
+            colour=discord.Colour.red())
+
+        embed_log.set_author(name=f'LOG: Pica-Ponto fechado por {inter.user.name}', icon_url=inter.user.display_avatar)
+        await canal_log.send(embed=embed_log)
+
+
+class BotoesSemana(View):
+    def __init__(self, top_todos, reset: bool = False):
+        super().__init__(timeout=30.0)
+        self.top_todos = top_todos
+        self.reset = reset
+
+    async def _enviar_relatorio(self, inter: discord.Interaction):
+        """Envia o cabeçalho + embeds por funcionário + backup."""
+        if self.top_todos:
+            embed_cabecalho = discord.Embed(
+                title='\U0001f4c5 Relatório Semanal de Horas',
+                description=f'Por {inter.user.mention}  •  {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")}',
+                color=discord.Colour.blue()
+            )
+            await inter.channel.send(embed=embed_cabecalho)
+
+            for user_data in self.top_todos:
+                user_id = user_data[0]
+                total_seg = user_data[1]
+                horas_total = int(total_seg // 3600)
+                minutos_total = int((total_seg % 3600) // 60)
+
+                registros = await db.get_all_user_registries(user_id)
+                por_dia = {}
+                for reg in registros:
+                    data_str = datetime.datetime.fromtimestamp(reg[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
+                    por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
+
+                embed_user = discord.Embed(
+                    description=f'<@{user_id}>\n\u23f1\ufe0f **Total Semanal: `{str(horas_total).zfill(2)}h {str(minutos_total).zfill(2)}m`**',
+                    color=discord.Colour.blurple()
+                )
+                for dia, seg_dia in sorted(por_dia.items()):
+                    h_dia = int(seg_dia // 3600)
+                    m_dia = int((seg_dia % 3600) // 60)
+                    embed_user.add_field(
+                        name=f'\U0001f4c5 {dia}',
+                        value=f'`{str(h_dia).zfill(2)}h {str(m_dia).zfill(2)}m`',
+                        inline=True
+                    )
+                await inter.channel.send(embed=embed_user)
+        else:
+            await inter.channel.send('\u26a0\ufe0f Nenhum funcionário com cargo de ponto e horas registadas esta semana.')
+
+        # Backup
+        try:
+            await inter.channel.send(
+                content='\U0001f4be **Backup da base de dados:**',
+                file=discord.File('db.sqlite3')
+            )
+        except Exception as e:
+            await inter.channel.send(f'\u274c Erro ao enviar backup: `{e}`')
+
+    @discord.ui.button(label='\u2714\ufe0f Confirmar', style=discord.ButtonStyle.danger)
+    async def confirmar_callback(self, button, inter: discord.Interaction):
+        for child in self.children:
+            child.disabled = True
+        await inter.response.edit_message(view=self)
+
+        await self._enviar_relatorio(inter)
+
+        if self.reset:
+            await db.reset_all_times()
+            await db.reset_all_registries()
+            embed_ok = discord.Embed(
+                title='\u2705 Semana Encerrada',
+                description='Relatório publicado, backup enviado e base de dados resetada com sucesso!',
+                color=discord.Colour.green()
+            )
+            await inter.followup.send(embed=embed_ok, ephemeral=True)
+            canal_log = inter.guild.get_channel(config['log_channel_id'])
+            embed_log = discord.Embed(
+                description=f'**\u2192 `Staff`: {inter.user.mention}**\n**\u2192 Encerramento semanal efetuado. Base de dados resetada.**',
+                colour=discord.Colour.red()
+            )
+            embed_log.set_author(name='LOG: Encerramento Semanal', icon_url=inter.user.display_avatar)
+            await canal_log.send(embed=embed_log)
+        else:
+            embed_ok = discord.Embed(
+                title='\u2705 Relatório Enviado',
+                description='Relatório publicado e backup enviado. Os dados **não foram apagados**.',
+                color=discord.Colour.green()
+            )
+            await inter.followup.send(embed=embed_ok, ephemeral=True)
+            canal_log = inter.guild.get_channel(config['log_channel_id'])
+            embed_log = discord.Embed(
+                description=f'**\u2192 `Staff`: {inter.user.mention}**\n**\u2192 Relatório semanal gerado e backup enviado. Sem reset.**',
+                colour=discord.Colour.blue()
+            )
+            embed_log.set_author(name='LOG: Relatório Semanal', icon_url=inter.user.display_avatar)
+            await canal_log.send(embed=embed_log)
+
+    @discord.ui.button(label='Cancelar', style=discord.ButtonStyle.secondary)
+    async def cancelar_callback(self, button, inter: discord.Interaction):
+        await inter.response.edit_message(
+            embed=discord.Embed(description='\u274c Operção cancelada.', color=discord.Colour.greyple()),
+            view=None
+        )
+
+
+class ConfirmarReset(View):
+    def __init__(self):
+        super().__init__(timeout=15.0)
+
+    @discord.ui.button(label='Confirmar', style=discord.ButtonStyle.green)
+    async def confirmar_callback(self, button, inter: discord.Interaction):
+        await db.reset_all_times()
+        await db.reset_all_registries()
+        
+        embed = discord.Embed(description='**Toda as informações (Horas/Minutos/Registros) dos pica-pontos foram resetadas!**',
+                              color=discord.Colour.red())
+        await inter.response.send_message(embed=embed)
+        
+        canal_log = inter.guild.get_channel(config['log_channel_id'])
+        embed_log = discord.Embed(description=f'**→ `Staff`: {inter.user.mention}**\n'
+            f'**→ Toda a base de dados de pica-ponto acaba de ser resetada.**', colour=discord.Colour.red())
+        embed_log.set_author(name='LOG: Reset ALL Database', icon_url=inter.user.display_avatar)
+        await canal_log.send(embed=embed_log)
+
+class BotoesReset(View):
+    def __init__(self):
+        super().__init__(timeout=30.0)
+
+    @discord.ui.button(label='Sim', style=discord.ButtonStyle.danger)
+    async def confirm_callback(self, button, inter: discord.Interaction):
+        embed = discord.Embed(description='**Você quer realmente resetar toda a base de dados?**',
+                              color=discord.Colour.red())
+        await inter.response.edit_message(embed=embed, view=ConfirmarReset())
+
+    @discord.ui.button(label='Não', style=discord.ButtonStyle.blurple)
+    async def recusar_callback(self, button, inter: discord.Interaction):
+        await inter.message.delete()
+
+
+def setup(client):
+    client.add_cog(PicaPonto(client))

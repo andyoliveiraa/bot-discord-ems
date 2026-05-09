@@ -1,0 +1,10 @@
+{
+    "server_name": "Nome do Seu Servidor",
+    "token": "TOKEN_DO_BOT_AQUI",
+    "owner_id": 123456789012345678,
+    "log_channel_id": 123456789012345678,
+    "staff_role_id": 123456789012345678,
+    "ponto_role_id": 123456789012345678,
+    "nome_corp": "NOME_DA_CORPORAÇÃO",
+    "timezone": "Europe/Lisbon"
+}
