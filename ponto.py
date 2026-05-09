@@ -16,9 +16,11 @@ class PicaPonto(commands.Cog):
     def __init__(self, client):
         self.client = client
         self.auto_close_task.start()
+        self.auto_backup_task.start()
 
     def cog_unload(self):
         self.auto_close_task.cancel()
+        self.auto_backup_task.cancel()
 
     @tasks.loop(minutes=5)
     async def auto_close_task(self):
@@ -52,6 +54,40 @@ class PicaPonto(commands.Cog):
 
     @auto_close_task.before_loop
     async def before_auto_close_task(self):
+        await self.client.wait_until_ready()
+
+    @tasks.loop(time=datetime.time(hour=7, minute=0, tzinfo=timezone(config["timezone"])))
+    async def auto_backup_task(self):
+        canal_log = self.client.get_channel(config["log_channel_id"])
+        if canal_log:
+            try:
+                await canal_log.send(
+                    content='**💽 Backup Automático Diário (07:00)**',
+                    file=discord.File('db.sqlite3')
+                )
+            except Exception as e:
+                print(f"Erro ao enviar backup automático no log: {e}")
+
+        dono_id = config.get("owner_id")
+        if dono_id:
+            dono = self.client.get_user(dono_id)
+            if not dono:
+                try:
+                    dono = await self.client.fetch_user(dono_id)
+                except:
+                    pass
+            
+            if dono:
+                try:
+                    await dono.send(
+                        content='**💽 Backup Automático Diário (07:00)**',
+                        file=discord.File('db.sqlite3')
+                    )
+                except Exception as e:
+                    print(f"Erro ao enviar backup automático para o dono: {e}")
+
+    @auto_backup_task.before_loop
+    async def before_auto_backup_task(self):
         await self.client.wait_until_ready()
 
     @commands.Cog.listener()
@@ -126,8 +162,7 @@ class PicaPonto(commands.Cog):
 
         await ctx.respond(view=BotoesReset())
 
-    @commands.slash_command(description='[ADM] Retorna o ranking das top 10 pessoas com mais horas na semana.', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @commands.slash_command(description='Retorna o ranking das top 10 pessoas com mais horas na semana.', contexts={discord.InteractionContextType.guild})
     async def ranking(self, ctx: discord.ApplicationContext):
 
         top10 = await db.get_ranking()
@@ -296,7 +331,7 @@ class PicaPonto(commands.Cog):
                 
             embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
             embed.set_author(name=f'Pica-Ponto de {ctx.user}', icon_url=ctx.user.display_avatar)
-            embed.set_footer(text=f'{config["server_name"]} • 2024')
+            embed.set_footer(text=f'{config["server_name"]} • 2026')
             
             msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
             estado["msg_id"] = msg.id
@@ -317,7 +352,7 @@ class PicaPonto(commands.Cog):
                               '**❗ Quando encerrar o seu serviço, encerre o pica-ponto no botão abaixo**',
                               color=discord.Colour.green())
         embed.set_author(name=f'Pica-Ponto de {ctx.user}', icon_url=ctx.user.display_avatar)
-        embed.set_footer(text=f'{config["server_name"]} • 2024')
+        embed.set_footer(text=f'{config["server_name"]} • 2026')
         
         await ctx.respond("✅ Pica-Ponto iniciado com sucesso!", ephemeral=True)
         msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
@@ -382,7 +417,7 @@ class finalizarPonto(View):
             
         novo_embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
         novo_embed.set_author(name=f'Pica-Ponto de {inter.user}', icon_url=inter.user.display_avatar)
-        novo_embed.set_footer(text=f'{config["server_name"]} • 2024')
+        novo_embed.set_footer(text=f'{config["server_name"]} • 2026')
         
         await inter.message.edit(embed=novo_embed, view=self)
 
