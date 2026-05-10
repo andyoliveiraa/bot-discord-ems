@@ -1,7 +1,46 @@
 import os
 import signal
 import sys
+import subprocess
+import time
 
+if "--run-bot" not in sys.argv:
+    # --- WATCHER ---
+    WATCHER_LOCK = "watcher.lock"
+    if os.path.exists(WATCHER_LOCK):
+        try:
+            with open(WATCHER_LOCK, "r") as f:
+                old_pid = int(f.read().strip())
+            output = os.popen(f'tasklist /FI "PID eq {old_pid}"').read()
+            if "python" in output.lower():
+                os.kill(old_pid, signal.SIGTERM)
+        except Exception:
+            pass
+
+    with open(WATCHER_LOCK, "w") as f:
+        f.write(str(os.getpid()))
+
+    while True:
+        print("[SISTEMA] Iniciando processo do bot...")
+        process = subprocess.Popen([sys.executable, sys.argv[0], "--run-bot"])
+        try:
+            process.wait()
+        except KeyboardInterrupt:
+            print("[SISTEMA] Interrompido pelo usuário.")
+            process.terminate()
+            break
+        
+        if process.returncode == 0:
+            print("[SISTEMA] Bot encerrado.")
+            break
+        else:
+            print(f"[SISTEMA] O bot foi encerrado de forma anormal (Erro {process.returncode}). Reiniciando em 5 segundos...")
+            with open("crashed.txt", "w") as f:
+                f.write("crash")
+            time.sleep(5)
+    sys.exit(0)
+
+# --- BOT CODE ---
 LOCK_FILE = "bot.lock"
 if os.path.exists(LOCK_FILE):
     try:
@@ -29,6 +68,12 @@ from discord.ui import InputText, Modal, Button, View
 from datetime import datetime
 from db import get_configs
 
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 client = commands.Bot(command_prefix=".", help_command=None, intents=discord.Intents().all())
 client.load_extension('ponto')
 
@@ -48,7 +93,25 @@ async def att_status():
 @client.event
 async def on_ready():
     print('Bot está online!')
+    
+    if os.path.exists("crashed.txt"):
+        try:
+            dono_id = config.get("owner_id")
+            if dono_id:
+                dono = await client.fetch_user(dono_id)
+                agora = datetime.now(pytz.timezone(config['timezone'])).strftime("%d/%m/%Y %H:%M:%S")
+                await dono.send(f"⚠️ **AVISO DO SISTEMA** ⚠️\nO bot encontrou um erro crítico e foi **reiniciado automaticamente** em `{agora}`.")
+            os.remove("crashed.txt")
+        except Exception as e:
+            print("Erro ao enviar aviso de reinício:", e)
+
     await att_status()
+
+@client.event
+async def on_application_command(ctx: discord.ApplicationContext):
+    agora = datetime.now(pytz.timezone(config['timezone'])).strftime("%d/%m/%Y %H:%M:%S")
+    canal = f"#{ctx.channel.name}" if hasattr(ctx.channel, 'name') else "DM"
+    print(f"[{agora}] 🔧 Comando executado: /{ctx.command.name} | Usuário: {ctx.author} | Sala: {canal} | Servidor: {ctx.guild.name if ctx.guild else 'DM'}")
 
 @client.event
 async def on_application_command_error(ctx: discord.ApplicationContext, error: discord.DiscordException):
@@ -102,7 +165,7 @@ async def addrole(ctx: discord.ApplicationContext, cargo: Option(discord.Role, "
 @commands.has_guild_permissions(administrator=True)
 async def embed(ctx: discord.ApplicationContext):
     embed = discord.Embed(title='Gerenciador de Embed', description='**Para enviar uma mensagem com o mesmo visual que esta (padrão embed), clique no botão abaixo, e preencha apenas os campos que você deseja.**', color=discord.Colour.red())
-    embed.set_footer(text=f'{config["server_name"]} • 2024', icon_url=client.user.display_avatar)
+    embed.set_footer(text=f'{config["server_name"]} • 2026', icon_url=client.user.display_avatar)
     create_embed = Button(label='Criar Embed', style=discord.ButtonStyle.blurple, emoji='🛠')
     async def button_callback(inter: discord.Interaction):
         await inter.response.send_modal(embed_modal(ctx))
@@ -135,7 +198,7 @@ class embed_modal(Modal):
             embed.set_image(url=self.children[3].value)
 
         embed.color = color()
-        embed.set_footer(text=f'{config["server_name"]} • 2024', icon_url=client.user.display_avatar)
+        embed.set_footer(text=f'{config["server_name"]} • 2026', icon_url=client.user.display_avatar)
         await inter.channel.send(embed=embed)
         await inter.response.send_message(f'<a:check:1269034091882221710> Embed criada com sucesso em {inter.channel.mention}!', ephemeral=True)
 
@@ -147,6 +210,17 @@ async def clear(ctx: discord.ApplicationContext,
         await ctx.channel.purge(limit=quantidade, bulk=True)
     )
     await ctx.respond(f'<a:check:1269034091882221710> Foram deletadas {msgs} mensagens!', delete_after=8.0)
+
+@client.slash_command(description='Mostra a latência e o status do bot', contexts={discord.InteractionContextType.guild})
+async def ping(ctx: discord.ApplicationContext):
+    latency = round(client.latency * 1000)
+    embed = discord.Embed(
+        title="🏓 Pong!",
+        description=f"**Status:** Online 🟢\n**Latência:** `{latency}ms`",
+        color=discord.Colour.green()
+    )
+    embed.set_footer(text=f'{config["server_name"]} • 2026', icon_url=client.user.display_avatar)
+    await ctx.respond(embed=embed)
 
 
 

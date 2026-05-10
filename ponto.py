@@ -11,14 +11,22 @@ db = Database('db.sqlite3')
 config = get_configs()
 
 active_pontos = {}
+ACTIVE_PONTOS_FILE = "active_pontos.json"
+
+def save_active_pontos():
+    import json
+    with open(ACTIVE_PONTOS_FILE, "w") as f:
+        json.dump(active_pontos, f)
 
 class PicaPonto(commands.Cog):
     def __init__(self, client):
         self.client = client
         self.auto_close_task.start()
+        self.auto_backup_task.start()
 
     def cog_unload(self):
         self.auto_close_task.cancel()
+        self.auto_backup_task.cancel()
 
     @tasks.loop(minutes=5)
     async def auto_close_task(self):
@@ -35,6 +43,7 @@ class PicaPonto(commands.Cog):
                 if estado["status"] == "pausado":
                     estado["pausas"].append([estado["inicio_pausa"], agora])
                 active_pontos.pop(user_id)
+                save_active_pontos()
                 
                 await db.create_registry(int(user_id), horario_inicio, agora, True, 0, json.dumps(estado["pausas"]))
                 
@@ -54,10 +63,98 @@ class PicaPonto(commands.Cog):
     async def before_auto_close_task(self):
         await self.client.wait_until_ready()
 
+    @tasks.loop(time=datetime.time(hour=7, minute=0, tzinfo=timezone(config["timezone"])))
+    async def auto_backup_task(self):
+        canal_log = self.client.get_channel(config["log_channel_id"])
+        if canal_log:
+            try:
+                await canal_log.send(
+                    content='**💽 Backup Automático Diário (07:00)**',
+                    file=discord.File('db.sqlite3')
+                )
+            except Exception as e:
+                print(f"Erro ao enviar backup automático no log: {e}")
+
+        dono_id = config.get("owner_id")
+        if dono_id:
+            dono = self.client.get_user(dono_id)
+            if not dono:
+                try:
+                    dono = await self.client.fetch_user(dono_id)
+                except:
+                    pass
+            
+            if dono:
+                try:
+                    await dono.send(
+                        content='**💽 Backup Automático Diário (07:00)**',
+                        file=discord.File('db.sqlite3')
+                    )
+                except Exception as e:
+                    print(f"Erro ao enviar backup automático para o dono: {e}")
+
+    @auto_backup_task.before_loop
+    async def before_auto_backup_task(self):
+        await self.client.wait_until_ready()
+
     @commands.Cog.listener()
     async def on_ready(self):
         print('Pica-Ponto carregado com sucesso!')
         self.client.add_view(view=finalizarPonto())
+        await self.fechar_pontos_pendentes()
+
+    async def fechar_pontos_pendentes(self):
+        import os
+        if not os.path.exists(ACTIVE_PONTOS_FILE):
+            return
+            
+        try:
+            with open(ACTIVE_PONTOS_FILE, "r") as f:
+                pontos_pendentes = json.load(f)
+        except Exception:
+            return
+            
+        if not pontos_pendentes:
+            return
+            
+        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        canal_log = self.client.get_channel(config["log_channel_id"])
+        
+        for user_id_str, estado in pontos_pendentes.items():
+            user_id = int(user_id_str)
+            if estado["status"] == "pausado":
+                estado["total_pausa"] += agora - estado["inicio_pausa"]
+                estado["pausas"].append([estado["inicio_pausa"], agora])
+            
+            horario_inicio = estado["inicio"]
+            segundos_totais = agora - horario_inicio - estado["total_pausa"]
+            if segundos_totais < 0: segundos_totais = 0
+            
+            await db.add_time(user_id, segundos_totais)
+            pauses_json = json.dumps(estado["pausas"])
+            await db.create_registry(user_id, horario_inicio, agora, True, segundos_totais, pauses_json)
+            
+            if canal_log:
+                horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
+                data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+                user = self.client.get_user(user_id)
+                user_mention = user.mention if user else f"<@{user_id}>"
+                
+                embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado Automático (Crash/Restart)**\n**→ `Funcionário`: {user_mention}**\n'
+                    f'**→ `Horário de Abertura`: {data_abertura}**\n'
+                    f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
+                    f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**', colour=discord.Colour.orange())
+                embed_log.set_author(name='LOG: Pica-Ponto fechado pelo Sistema', icon_url=self.client.user.display_avatar)
+                try:
+                    await canal_log.send(embed=embed_log)
+                except Exception:
+                    pass
+                    
+        try:
+            os.remove(ACTIVE_PONTOS_FILE)
+        except:
+            pass
+        active_pontos.clear()
 
     @commands.slash_command(description='[ADM] Adiciona horas/minutos para uma pessoa no pica-ponto', contexts={discord.InteractionContextType.guild})
     @commands.has_any_role(config['staff_role_id'])
@@ -126,8 +223,7 @@ class PicaPonto(commands.Cog):
 
         await ctx.respond(view=BotoesReset())
 
-    @commands.slash_command(description='[ADM] Retorna o ranking das top 10 pessoas com mais horas na semana.', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @commands.slash_command(description='Retorna o ranking das top 10 pessoas com mais horas na semana.', contexts={discord.InteractionContextType.guild})
     async def ranking(self, ctx: discord.ApplicationContext):
 
         top10 = await db.get_ranking()
@@ -202,6 +298,7 @@ class PicaPonto(commands.Cog):
             return await ctx.respond('❌ Este usuário ainda não possui nenhum registro salvo.', ephemeral=True)
 
         registros_por_dia = {}
+        total_dia_segundos = {}
         total_semana_segundos = 0
 
         for k in dados:
@@ -221,6 +318,7 @@ class PicaPonto(commands.Cog):
             mins = str((duracao % 3600) // 60).zfill(2)
             
             total_semana_segundos += duracao
+            total_dia_segundos[data_str] = total_dia_segundos.get(data_str, 0) + duracao
 
             if data_str not in registros_por_dia:
                 registros_por_dia[data_str] = []
@@ -247,7 +345,10 @@ class PicaPonto(commands.Cog):
                 campo_valor += r + '\n'
             if len(campo_valor) > 1024:
                 campo_valor = campo_valor[:1020] + '...'
-            embed.add_field(name=f'📅 {dia}', value=campo_valor.strip(), inline=False)
+            seg_dia = total_dia_segundos.get(dia, 0)
+            hr_dia = str(seg_dia // 3600).zfill(2)
+            min_dia = str((seg_dia % 3600) // 60).zfill(2)
+            embed.add_field(name=f'📅 {dia}  —  ⏱️ `{hr_dia}h {min_dia}m`', value=campo_valor.strip(), inline=False)
         
         embed.set_footer(text='🟡 = Fechado por staff  |  Horários no fuso configurado')
         await ctx.respond(embed=embed, ephemeral=True)
@@ -296,7 +397,7 @@ class PicaPonto(commands.Cog):
                 
             embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
             embed.set_author(name=f'Pica-Ponto de {ctx.user}', icon_url=ctx.user.display_avatar)
-            embed.set_footer(text=f'{config["server_name"]} • 2024')
+            embed.set_footer(text=f'{config["server_name"]} • 2026')
             
             msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
             estado["msg_id"] = msg.id
@@ -317,11 +418,12 @@ class PicaPonto(commands.Cog):
                               '**❗ Quando encerrar o seu serviço, encerre o pica-ponto no botão abaixo**',
                               color=discord.Colour.green())
         embed.set_author(name=f'Pica-Ponto de {ctx.user}', icon_url=ctx.user.display_avatar)
-        embed.set_footer(text=f'{config["server_name"]} • 2024')
+        embed.set_footer(text=f'{config["server_name"]} • 2026')
         
         await ctx.respond("✅ Pica-Ponto iniciado com sucesso!", ephemeral=True)
         msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
         active_pontos[ctx.user.id]["msg_id"] = msg.id
+        save_active_pontos()
 
 
 class finalizarPonto(View):
@@ -357,6 +459,8 @@ class finalizarPonto(View):
             button.style = discord.ButtonStyle.secondary
             await inter.response.defer()
 
+        save_active_pontos()
+
         horario_inicio = estado["inicio"]
         display_horario = horario_inicio + estado["total_pausa"]
         
@@ -382,7 +486,7 @@ class finalizarPonto(View):
             
         novo_embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
         novo_embed.set_author(name=f'Pica-Ponto de {inter.user}', icon_url=inter.user.display_avatar)
-        novo_embed.set_footer(text=f'{config["server_name"]} • 2024')
+        novo_embed.set_footer(text=f'{config["server_name"]} • 2026')
         
         await inter.message.edit(embed=novo_embed, view=self)
 
@@ -406,6 +510,7 @@ class finalizarPonto(View):
                             if segundos_totais < 0: segundos_totais = 0
                             horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
                             active_pontos.pop(user_id)
+                            save_active_pontos()
                             
                             user = inter.guild.get_member(int(user_id))
                             import json
@@ -453,6 +558,7 @@ class finalizarPonto(View):
         if segundos_totais < 0: segundos_totais = 0
         horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
         active_pontos.pop(inter.user.id)
+        save_active_pontos()
 
         await db.add_time(inter.user.id, segundos_totais)
         
