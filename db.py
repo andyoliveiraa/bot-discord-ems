@@ -68,6 +68,29 @@ class Database:
                 
                 return f"{letra}-{str(proximo).zfill(2)}"
 
+    async def shift_callsigns_down(self, letra: str, removido_num: int):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT user_id, callsign, nome FROM funcionarios WHERE callsign LIKE ? ORDER BY callsign ASC', (f'{letra}-%',))
+                rows = await cursor.fetchall()
+                
+                shifted = []
+                for row in rows:
+                    user_id = row[0]
+                    callsign = row[1]
+                    nome = row[2]
+                    try:
+                        num = int(callsign.split('-')[1])
+                        if num > removido_num:
+                            novo_num_str = str(num - 1).zfill(2)
+                            novo_callsign = f"{letra}-{novo_num_str}"
+                            await cursor.execute('UPDATE funcionarios SET callsign = ? WHERE user_id = ?', (novo_callsign, user_id))
+                            shifted.append((user_id, novo_callsign, nome))
+                    except:
+                        pass
+                await conn.commit()
+                return shifted
+
     async def get_user_time(self, user_id: int):
         async with aiosqlite.connect(self.connector) as conn:
             async with conn.cursor() as cursor:

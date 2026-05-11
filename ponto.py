@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 from discord.ui import View, InputText, Modal
 from pytz import timezone
 import json
+import re
 from db import Database, get_configs
 
 db = Database('db.sqlite3')
@@ -99,10 +100,12 @@ class PicaPonto(commands.Cog):
         self.client = client
         self.auto_close_task.start()
         self.auto_backup_task.start()
+        self.auto_register_task.start()
 
     def cog_unload(self):
         self.auto_close_task.cancel()
         self.auto_backup_task.cancel()
+        self.auto_register_task.cancel()
 
     @tasks.loop(minutes=5)
     async def auto_close_task(self):
@@ -171,6 +174,97 @@ class PicaPonto(commands.Cog):
 
     @auto_backup_task.before_loop
     async def before_auto_backup_task(self):
+        await self.client.wait_until_ready()
+
+    @tasks.loop(minutes=10)
+    async def auto_register_task(self):
+        for guild in self.client.guilds:
+            funcionarios_db = await db.get_all_funcionarios()
+            ids_registrados = [f[0] for f in funcionarios_db]
+
+            for member in guild.members:
+                if member.bot:
+                    continue
+
+                # Obter patente correspondente ao cargo atual
+                patente_atual_key = None
+                patente_atual_info = None
+                for p_key, p_info in config.get("cargos_patentes", {}).items():
+                    if p_info.get("id") and any(r.id == p_info["id"] for r in member.roles):
+                        patente_atual_key = p_key
+                        patente_atual_info = p_info
+                        break
+
+                if not patente_atual_key:
+                    continue # Não tem patente
+
+                func_db = next((f for f in funcionarios_db if f[0] == member.id), None)
+                
+                if not func_db:
+                    # Tenta extrair callsign e nome do nick: [Callsign] Nome
+                    nick_atual = member.display_name
+                    match = re.match(r'^\[(.*?)\]\s+(.*)', nick_atual)
+                    
+                    if match:
+                        callsign = match.group(1)
+                        nome = match.group(2)
+                    else:
+                        continue
+
+                    await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
+                    
+                    log_canal_id = config.get("log_contratacoes_id")
+                    if log_canal_id:
+                        log_canal = guild.get_channel(log_canal_id)
+                        if log_canal:
+                            embed_log = discord.Embed(
+                                title='LOG: Auto-Registro Efetuado',
+                                description=f'**→ `Sistema`: Auto-Registro**\n**→ `Funcionário`: {member.mention}**\n**→ `Patente Detectada`: {patente_atual_info["nome"]}**\n**→ `Callsign Extraído`: {callsign}**',
+                                colour=discord.Colour.green()
+                            )
+                            await log_canal.send(embed=embed_log)
+                else:
+                    velho_callsign = func_db[2]
+                    try:
+                        velha_letra, velho_num_str = velho_callsign.split('-')
+                        velho_num = int(velho_num_str)
+                    except:
+                        continue
+                        
+                    letra_correta = patente_atual_info["letra"]
+                    
+                    if velha_letra != letra_correta:
+                        novo_callsign = await db.get_next_callsign(letra_correta)
+                        nome_func = func_db[3]
+                        
+                        await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome_func)
+                        
+                        shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
+                        for s_user_id, s_novo_callsign, s_nome in shifted_users:
+                            try:
+                                s_member = guild.get_member(s_user_id) or await guild.fetch_member(s_user_id)
+                                await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+                            except:
+                                pass
+                        
+                        try:
+                            await member.edit(nick=f"[{novo_callsign}] {nome_func}")
+                        except:
+                            pass
+                            
+                        log_canal_id = config.get("log_contratacoes_id")
+                        if log_canal_id:
+                            log_canal = guild.get_channel(log_canal_id)
+                            if log_canal:
+                                embed_log = discord.Embed(
+                                    title='LOG: Auto-Correção de Callsign',
+                                    description=f'**→ `Sistema`: Auto-Correção**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Antigo`: {velho_callsign}**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
+                                    colour=discord.Colour.blue()
+                                )
+                                await log_canal.send(embed=embed_log)
+
+    @auto_register_task.before_loop
+    async def before_auto_register_task(self):
         await self.client.wait_until_ready()
 
     @commands.Cog.listener()
@@ -381,7 +475,17 @@ class PicaPonto(commands.Cog):
         except discord.Forbidden:
             pass
             
+        velha_letra, velho_num = func[1].split('-')
+        velho_num = int(velho_num)
         await db.remove_funcionario(usuario.id)
+        
+        shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
+        for s_user_id, s_novo_callsign, s_nome in shifted_users:
+            try:
+                s_member = ctx.guild.get_member(s_user_id) or await ctx.guild.fetch_member(s_user_id)
+                await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+            except:
+                pass
         
         try:
             await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você foi despedido(a) e removido(a) do sistema!\n**→ Staff:** {ctx.author.mention}\n**→ Motivo:** {motivo}')
@@ -448,7 +552,17 @@ class PicaPonto(commands.Cog):
         except discord.Forbidden:
             pass
             
+        velha_letra, velho_num = func[1].split('-')
+        velho_num = int(velho_num)
         await db.add_funcionario(usuario.id, nova_patente, novo_callsign, nome_func)
+        
+        shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
+        for s_user_id, s_novo_callsign, s_nome in shifted_users:
+            try:
+                s_member = ctx.guild.get_member(s_user_id) or await ctx.guild.fetch_member(s_user_id)
+                await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+            except:
+                pass
         
         try:
             await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você teve a sua patente alterada!\n**→ Staff:** {ctx.author.mention}\n**→ Nova Patente:** {nova_patente_info["nome"]}\n**→ Novo Callsign:** `{novo_callsign}`\n**→ Motivo:** {motivo}')
