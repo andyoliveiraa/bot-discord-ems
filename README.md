@@ -21,7 +21,8 @@ Bot de registo de horas de serviço desenvolvido para servidores de roleplay. Pe
 - 👥 Sistema Integrado de RH: `/contratar`, `/despedir`, `/promover`
 - 💶 Cálculo automático de pagamentos por horas trabalhadas e patentes
 - 🎫 Sistema de tickets integrado com painel de controlo em Português
-- 🛡️ Watcher de auto-restart (o bot reinicia sozinho em caso de crash)
+- 🤖 Auto-Registo e Correção de Callsigns (ajuste automático de patentes e numeração contínua, ex: W-02 vira W-01 se o W-01 for demitido)
+- 🛡️ Watcher de auto-restart integrado (o bot reinicia sozinho em caso de crash)
 - ⚙️ Totalmente configurável via `config.json`
 
 > **🧠 Recomenda-se utilizar o bot em apenas um servidor por vez, pois foi desenvolvido para funcionar em instância única.**
@@ -85,13 +86,10 @@ pip install -r requirements.txt
 | `timezone` | Fuso horário (ex: `Europe/Lisbon`, `America/Sao_Paulo`) |
 | `cargos_patentes` | Objeto que define as patentes, IDs dos cargos, letras de callsign e o valor recebido por hora |
 
-4. Execute o bot normalmente ou via watcher para auto-restart:
+4. Execute o bot:
 ```bash
-# Execução normal
+# Execução padrão (O Watcher de auto-restart já está integrado!)
 python main.py
-
-# Execução com auto-restart em caso de crash (recomendado)
-python watcher.py
 ```
 
 ---
@@ -167,12 +165,12 @@ O bot envia automaticamente um backup da base de dados todos os dias às **07:00
 
 ---
 
-## 🛡️ Watcher de Auto-Restart
+## 🛡️ Watcher de Auto-Restart Integrado
 
-O ficheiro `watcher.py` monitoriza o processo do bot e reinicia-o automaticamente em caso de crash:
+O próprio ficheiro `main.py` possui um sistema de watcher que monitoriza o processo do bot (`--run-bot`) e reinicia-o automaticamente em caso de crash:
 - Útil para garantir disponibilidade contínua sem intervenção manual
-- Registra os crashes num ficheiro de log com data e hora
-- Para parar o watcher, elimina o ficheiro `watcher.lock` ou encerra o processo
+- Quando executas `python main.py`, o watcher é iniciado. O bot em si corre num subprocesso.
+- Para parar o bot completamente, basta interromper o processo principal ou eliminar o ficheiro `watcher.lock`.
 
 ---
 
