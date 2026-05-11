@@ -208,18 +208,46 @@ class PicaPonto(commands.Cog):
                     else:
                         continue
 
-                    await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
+                    letra_correta = patente_atual_info["letra"]
+                    try:
+                        ext_letra = callsign.split('-')[0]
+                    except:
+                        ext_letra = ""
+                        
+                    callsign_is_taken = any(f[2] == callsign for f in funcionarios_db)
                     
-                    log_canal_id = config.get("log_contratacoes_id")
-                    if log_canal_id:
-                        log_canal = guild.get_channel(log_canal_id)
-                        if log_canal:
-                            embed_log = discord.Embed(
-                                title='LOG: Auto-Registro Efetuado',
-                                description=f'**→ `Sistema`: Auto-Registro**\n**→ `Funcionário`: {member.mention}**\n**→ `Patente Detectada`: {patente_atual_info["nome"]}**\n**→ `Callsign Extraído`: {callsign}**',
-                                colour=discord.Colour.green()
-                            )
-                            await log_canal.send(embed=embed_log)
+                    if ext_letra != letra_correta or callsign_is_taken:
+                        novo_callsign = await db.get_next_callsign(letra_correta)
+                        await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome)
+                        
+                        try:
+                            await member.edit(nick=f"[{novo_callsign}] {nome}")
+                        except:
+                            pass
+                            
+                        log_canal_id = config.get("log_contratacoes_id")
+                        if log_canal_id:
+                            log_canal = guild.get_channel(log_canal_id)
+                            if log_canal:
+                                embed_log = discord.Embed(
+                                    title='LOG: Auto-Correção e Registro',
+                                    description=f'**→ `Sistema`: Auto-Correção (Novo Registro)**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Extraído`: {callsign} (Incorreto/Ocupado)**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
+                                    colour=discord.Colour.blue()
+                                )
+                                await log_canal.send(embed=embed_log)
+                    else:
+                        await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
+                        
+                        log_canal_id = config.get("log_contratacoes_id")
+                        if log_canal_id:
+                            log_canal = guild.get_channel(log_canal_id)
+                            if log_canal:
+                                embed_log = discord.Embed(
+                                    title='LOG: Auto-Registro Efetuado',
+                                    description=f'**→ `Sistema`: Auto-Registro**\n**→ `Funcionário`: {member.mention}**\n**→ `Patente Detectada`: {patente_atual_info["nome"]}**\n**→ `Callsign`: {callsign}**',
+                                    colour=discord.Colour.green()
+                                )
+                                await log_canal.send(embed=embed_log)
                 else:
                     velho_callsign = func_db[2]
                     try:
@@ -259,6 +287,13 @@ class PicaPonto(commands.Cog):
                                     colour=discord.Colour.blue()
                                 )
                                 await log_canal.send(embed=embed_log)
+                    else:
+                        nick_esperado = f"[{velho_callsign}] {func_db[3]}"
+                        if member.display_name != nick_esperado:
+                            try:
+                                await member.edit(nick=nick_esperado)
+                            except:
+                                pass
 
     @auto_register_task.before_loop
     async def before_auto_register_task(self):
@@ -651,19 +686,49 @@ class PicaPonto(commands.Cog):
                 else:
                     continue
 
-                await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
-                registrados += 1
+                letra_correta = patente_atual_info["letra"]
+                try:
+                    ext_letra = callsign.split('-')[0]
+                except:
+                    ext_letra = ""
+                    
+                callsign_is_taken = any(f[2] == callsign for f in funcionarios_db)
                 
-                log_canal_id = config.get("log_contratacoes_id")
-                if log_canal_id:
-                    log_canal = guild.get_channel(log_canal_id)
-                    if log_canal:
-                        embed_log = discord.Embed(
-                            title='LOG: Auto-Registro Efetuado',
-                            description=f'**→ `Sistema`: Auto-Registro (Manual)**\n**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {member.mention}**\n**→ `Patente Detectada`: {patente_atual_info["nome"]}**\n**→ `Callsign Extraído`: {callsign}**',
-                            colour=discord.Colour.green()
-                        )
-                        await log_canal.send(embed=embed_log)
+                if ext_letra != letra_correta or callsign_is_taken:
+                    novo_callsign = await db.get_next_callsign(letra_correta)
+                    await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome)
+                    registrados += 1
+                    corrigidos += 1
+                    
+                    try:
+                        await member.edit(nick=f"[{novo_callsign}] {nome}")
+                    except:
+                        pass
+                        
+                    log_canal_id = config.get("log_contratacoes_id")
+                    if log_canal_id:
+                        log_canal = guild.get_channel(log_canal_id)
+                        if log_canal:
+                            embed_log = discord.Embed(
+                                title='LOG: Auto-Correção e Registro',
+                                description=f'**→ `Sistema`: Auto-Correção (Novo Registro)**\n**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Extraído`: {callsign} (Incorreto/Ocupado)**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
+                                colour=discord.Colour.blue()
+                            )
+                            await log_canal.send(embed=embed_log)
+                else:
+                    await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
+                    registrados += 1
+                    
+                    log_canal_id = config.get("log_contratacoes_id")
+                    if log_canal_id:
+                        log_canal = guild.get_channel(log_canal_id)
+                        if log_canal:
+                            embed_log = discord.Embed(
+                                title='LOG: Auto-Registro Efetuado',
+                                description=f'**→ `Sistema`: Auto-Registro (Manual)**\n**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {member.mention}**\n**→ `Patente Detectada`: {patente_atual_info["nome"]}**\n**→ `Callsign Extraído`: {callsign}**',
+                                colour=discord.Colour.green()
+                            )
+                            await log_canal.send(embed=embed_log)
             else:
                 velho_callsign = func_db[2]
                 try:
@@ -705,6 +770,13 @@ class PicaPonto(commands.Cog):
                                 colour=discord.Colour.blue()
                             )
                             await log_canal.send(embed=embed_log)
+                else:
+                    nick_esperado = f"[{velho_callsign}] {func_db[3]}"
+                    if member.display_name != nick_esperado:
+                        try:
+                            await member.edit(nick=nick_esperado)
+                        except:
+                            pass
 
         embed = discord.Embed(
             title="✅ Verificação Concluída", 
