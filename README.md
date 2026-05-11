@@ -15,9 +15,11 @@ Bot de registo de horas de serviço desenvolvido para servidores de roleplay. Pe
 - 🔄 Encerramento automático do ponto após 24h de inatividade (com DM ao funcionário)
 - ♻️ Recuperação automática de pontos abertos após crash/reinício do bot
 - ➕ Adição/Remoção manual de horas por staff
-- 📅 Relatório semanal com horas por dia por funcionário (`/semana`)
-- 🔁 Reset semanal com backup da base de dados (`/resetarsemana`)
+- 📅 Relatório semanal completo em PDF com cálculo financeiro (`/semana`)
+- 🔁 Reset semanal com backup e limpeza de horas, mantendo o registo de funcionários (`/resetarsemana`)
 - 💽 Backup automático diário às **07:00** enviado no canal de logs e por DM ao dono
+- 👥 Sistema Integrado de RH: `/novofunc`, `/despedir`, `/promover`
+- 💶 Cálculo automático de pagamentos por horas trabalhadas e patentes
 - 🎫 Sistema de tickets integrado com painel de controlo em Português
 - 🛡️ Watcher de auto-restart (o bot reinicia sozinho em caso de crash)
 - ⚙️ Totalmente configurável via `config.json`
@@ -52,10 +54,20 @@ pip install -r requirements.txt
     "token": "Token do bot do Discord",
     "owner_id": SEU_ID_DISCORD,
     "log_channel_id": ID_CANAL_LOGS,
+    "log_contratacoes_id": ID_CANAL_CONTRATACOES,
     "staff_role_id": ID_CARGO_STAFF,
     "ponto_role_id": ID_CARGO_ACESSO_PONTO,
+    "cargo_equipa_id": ID_CARGO_GERAL_DA_EQUIPA,
     "nome_corp": "NOME_DA_CORPORAÇÃO",
-    "timezone": "Europe/Lisbon"
+    "timezone": "Europe/Lisbon",
+    "cargos_patentes": {
+        "DIRETOR": {
+            "nome": "Diretor",
+            "id": 123456789012345678,
+            "letra": "A",
+            "valor_hora": 2000000.00
+        }
+    }
 }
 ```
 
@@ -65,10 +77,13 @@ pip install -r requirements.txt
 | `token` | Token do bot no Discord Developer Portal |
 | `owner_id` | ID do dono do bot (acesso ao `/backup` e backups automáticos por DM) |
 | `log_channel_id` | ID do canal onde os logs e backups automáticos serão enviados |
+| `log_contratacoes_id` | ID do canal de logs para contratações, promoções e demissões |
 | `staff_role_id` | ID do cargo com acesso aos comandos de staff |
 | `ponto_role_id` | ID do cargo necessário para usar `/ponto` e `/pontosreg` |
+| `cargo_equipa_id` | ID do cargo geral da equipa que será dado a novos funcionários |
 | `nome_corp` | Nome da corporação (aparece no painel de ponto) |
 | `timezone` | Fuso horário (ex: `Europe/Lisbon`, `America/Sao_Paulo`) |
+| `cargos_patentes` | Objeto que define as patentes, IDs dos cargos, letras de callsign e o valor recebido por hora |
 
 4. Execute o bot normalmente ou via watcher para auto-restart:
 ```bash
@@ -89,7 +104,7 @@ python watcher.py
 | Comando | Descrição |
 |---|---|
 | `/ponto` | Inicia o teu turno. Cria um painel pessoal com botões de **Pausar** e **Finalizar**. Se já tens um ponto ativo, atualiza o painel no canal atual. |
-| `/pontosreg` | Mostra o histórico completo de pontos da semana (privado, só tu vês). Lista os turnos por dia com horários de entrada/saída, duração, pausas e **total de horas trabalhadas no dia** ao lado da data. |
+| `/pontosreg` | Mostra o histórico completo de pontos da semana (privado, só tu vês). Lista os turnos por dia com horários, pausas, **total de horas trabalhadas** e o **valor financeiro a receber** baseado na patente. |
 
 ---
 
@@ -98,13 +113,16 @@ python watcher.py
 
 | Comando | Descrição |
 |---|---|
-| `/addtempo` | Adiciona horas e minutos ao total semanal de um funcionário. Requer selecionar o utilizador, quantidade de horas/minutos e um motivo. O funcionário recebe uma DM a informar da alteração. |
+| `/novofunc` | Regista um novo funcionário no sistema, gera um indicativo (Callsign), adiciona cargos de patente e altera o apelido automaticamente. Exige motivo e notifica por DM e canal de logs. |
+| `/despedir` | Remove um funcionário do sistema. Limpa a callsign (que ficará disponível para a próxima pessoa), retira os cargos e envia a notificação no canal e DM informando o motivo. |
+| `/promover` | Altera a patente do funcionário. Modifica o cargo, regenera a callsign e atualiza o apelido do Discord. Pede um motivo que é enviado na DM e canal de logs. |
+| `/addtempo` | Adiciona horas e minutos ao total semanal de um funcionário registrado. O funcionário recebe uma DM informando a alteração e o motivo inserido pelo staff. |
 | `/deltempo` | Remove horas e minutos do total semanal de um funcionário. Funciona da mesma forma que `/addtempo`, mas subtrai o tempo. |
-| `/resetar_usuario` | Zera completamente as horas semanais de um funcionário específico. |
-| `/resetar_todos` | Zera as horas e apaga todos os registos de todos os funcionários. Pede dupla confirmação antes de executar. |
-| `/ranking` | Exibe o ranking das top 10 pessoas com mais horas na semana atual. |
-| `/semana` | Gera o **relatório semanal** de horas (apenas membros com cargo `ponto_role_id`), com detalhe por dia, e envia um backup da base de dados. **Os dados não são apagados.** |
-| `/resetarsemana` | Executa o encerramento completo da semana: relatório de horas por funcionário + backup da base de dados + **reset de todos os dados**. Requer confirmação. |
+| `/resetar_usuario` | Zera completamente as horas semanais de um funcionário específico (o registo do funcionário permanece intacto). |
+| `/resetar_todos` | Zera as horas e apaga todos os registos de tempo de todos. Pede dupla confirmação antes de executar. |
+| `/ranking` | Exibe o ranking das top 10 pessoas com mais horas na semana atual e os seus **pagamentos semanais**. |
+| `/semana` | Gera o **relatório semanal financeiro (PDF)** com as horas/pagamentos diários de cada funcionário, e envia um backup da base de dados. **Os dados não são apagados.** |
+| `/resetarsemana` | Executa o encerramento completo da semana: **gera PDF completo**, envia no canal e na DM do Dono e faz backup. Por fim, **reseta as horas e tempos (mas não as contas de funcionários)**. |
 
 ---
 

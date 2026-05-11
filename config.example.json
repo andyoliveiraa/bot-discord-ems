@@ -3,8 +3,21 @@
     "token": "TOKEN_DO_BOT_AQUI",
     "owner_id": 123456789012345678,
     "log_channel_id": 123456789012345678,
+    "log_contratacoes_id": 123456789012345678,
     "staff_role_id": 123456789012345678,
     "ponto_role_id": 123456789012345678,
     "nome_corp": "NOME_DA_CORPORAÇÃO",
-    "timezone": "Europe/Lisbon"
+    "timezone": "Europe/Lisbon",
+    "cargo_equipa_id": 123456789012345678,
+    "cargos_patentes": {
+        "estagiario": {"nome": "Estagiário", "id": 123456789012345678, "letra": "W", "valor_hora": 200000},
+        "tas": {"nome": "Técnico Auxiliar de saúde", "id": 123456789012345678, "letra": "S", "valor_hora": 400000},
+        "tem": {"nome": "Técnico de Emergência Médica", "id": 123456789012345678, "letra": "O", "valor_hora": 600000},
+        "enfermeiro": {"nome": "Enfermeiro", "id": 123456789012345678, "letra": "L", "valor_hora": 800000},
+        "medico": {"nome": "Médico", "id": 123456789012345678, "letra": "G", "valor_hora": 1000000},
+        "medico_chefe": {"nome": "Médico Chefe", "id": 123456789012345678, "letra": "E", "valor_hora": 1400000},
+        "sub_diretor": {"nome": "Sub-Diretor", "id": 123456789012345678, "letra": "D", "valor_hora": 1600000},
+        "diretor_adjunto": {"nome": "Diretor Adjunto", "id": 123456789012345678, "letra": "B", "valor_hora": 1800000},
+        "diretor": {"nome": "Diretor", "id": 123456789012345678, "letra": "A", "valor_hora": 2000000}
+    }
 }

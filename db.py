@@ -5,6 +5,69 @@ class Database:
     def __init__(self, db_connection):
         self.connector = db_connection
 
+    async def setup_db(self):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS funcionarios (
+                        user_id INTEGER PRIMARY KEY,
+                        patente_id TEXT,
+                        callsign TEXT,
+                        nome TEXT
+                    )
+                ''')
+            await conn.commit()
+
+    async def add_funcionario(self, user_id: int, patente_id: str, callsign: str, nome: str):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('INSERT OR REPLACE INTO funcionarios (user_id, patente_id, callsign, nome) VALUES (?, ?, ?, ?)',
+                                     (user_id, patente_id, callsign, nome))
+            await conn.commit()
+
+    async def remove_funcionario(self, user_id: int):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('DELETE FROM funcionarios WHERE user_id = ?', (user_id,))
+            await conn.commit()
+
+    async def get_funcionario(self, user_id: int):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT patente_id, callsign, nome FROM funcionarios WHERE user_id = ?', (user_id,))
+                return await cursor.fetchone()
+
+    async def get_all_funcionarios(self):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT user_id, patente_id, callsign, nome FROM funcionarios')
+                return await cursor.fetchall()
+
+    async def get_next_callsign(self, letra: str) -> str:
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT callsign FROM funcionarios WHERE callsign LIKE ? ORDER BY callsign ASC', (f'{letra}-%',))
+                rows = await cursor.fetchall()
+                
+                # Encontrar o primeiro número disponível
+                numeros_existentes = []
+                for row in rows:
+                    try:
+                        num = int(row[0].split('-')[1])
+                        numeros_existentes.append(num)
+                    except:
+                        pass
+                
+                numeros_existentes.sort()
+                proximo = 1
+                for num in numeros_existentes:
+                    if num == proximo:
+                        proximo += 1
+                    elif num > proximo:
+                        break
+                
+                return f"{letra}-{str(proximo).zfill(2)}"
+
     async def get_user_time(self, user_id: int):
         async with aiosqlite.connect(self.connector) as conn:
             async with conn.cursor() as cursor:

@@ -13,6 +13,82 @@ config = get_configs()
 active_pontos = {}
 ACTIVE_PONTOS_FILE = "active_pontos.json"
 
+def formatar_moeda(valor: float) -> str:
+    return f"{valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + " €"
+
+def formatar_moeda_pdf(valor: float) -> str:
+    return f"{valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + " EUR"
+
+async def gerar_pdf_semanal(top_todos, guild):
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+        
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=15)
+    pdf.cell(200, 10, txt="Relatorio Semanal de Horas e Pagamentos", ln=1, align='C')
+    pdf.set_font("Arial", size=11)
+    
+    total_semana_geral = 0
+    total_pagamento_geral = 0
+    
+    for user_data in top_todos:
+        user_id = user_data[0]
+        total_seg = user_data[1]
+        
+        func_db = await db.get_funcionario(user_id)
+        valor_hora = 0
+        nome_func = f"ID: {user_id}"
+        if func_db:
+            patente_info = config.get("cargos_patentes", {}).get(func_db[0])
+            if patente_info:
+                valor_hora = patente_info.get("valor_hora", 0)
+            nome_func = f"[{func_db[1]}] {func_db[2]}"
+        else:
+            membro = guild.get_member(user_id)
+            if membro:
+                nome_func = membro.display_name
+                
+        pagamento_semana = (total_seg / 3600) * valor_hora
+        total_semana_geral += total_seg
+        total_pagamento_geral += pagamento_semana
+        
+        horas_total = int(total_seg // 3600)
+        minutos_total = int((total_seg % 3600) // 60)
+        
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt=f"Funcionario: {nome_func}", ln=1, align='L')
+        pdf.set_font("Arial", size=11)
+        pdf.cell(200, 8, txt=f"Total Semana: {horas_total}h {minutos_total}m - A receber: {formatar_moeda_pdf(pagamento_semana)}", ln=1, align='L')
+        
+        registros = await db.get_all_user_registries(user_id)
+        por_dia = {}
+        for reg in registros:
+            data_str = datetime.datetime.fromtimestamp(reg[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
+            por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
+            
+        for dia, seg_dia in sorted(por_dia.items()):
+            h_dia = int(seg_dia // 3600)
+            m_dia = int((seg_dia % 3600) // 60)
+            pagamento_dia = (seg_dia / 3600) * valor_hora
+            pdf.cell(200, 6, txt=f"  - {dia}: {h_dia}h {m_dia}m | A receber: {formatar_moeda_pdf(pagamento_dia)}", ln=1, align='L')
+            
+        pdf.cell(200, 5, txt="", ln=1)
+        
+    pdf.set_font("Arial", 'B', 13)
+    pdf.cell(200, 10, txt="RESUMO DA SEMANA", ln=1, align='C')
+    h_geral = int(total_semana_geral // 3600)
+    m_geral = int((total_semana_geral % 3600) // 60)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Total de Horas Trabalhadas: {h_geral}h {m_geral}m", ln=1, align='L')
+    pdf.cell(200, 10, txt=f"Total a Pagar: {formatar_moeda_pdf(total_pagamento_geral)}", ln=1, align='L')
+    
+    file_path = "relatorio_semanal.pdf"
+    pdf.output(file_path)
+    return file_path
+
 def save_active_pontos():
     import json
     with open(ACTIVE_PONTOS_FILE, "w") as f:
@@ -100,6 +176,7 @@ class PicaPonto(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print('Pica-Ponto carregado com sucesso!')
+        await db.setup_db()
         self.client.add_view(view=finalizarPonto())
         await self.fechar_pontos_pendentes()
 
@@ -163,6 +240,10 @@ class PicaPonto(commands.Cog):
                     minutos: Option(int, "Digite a quantidade de minutos", required=True, min_value=0, max_value=59),
                     motivo: Option(str, "Digite o motivo da adição de horas (Ficará em exibição no log)", required=True)):
 
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.respond('❌ Este usuário não é um funcionário registrado no sistema.', ephemeral=True)
+
         total = (int(horas) * 3600) + (int(minutos) * 60)
         await db.add_time(usuario.id, total)
 
@@ -186,6 +267,10 @@ class PicaPonto(commands.Cog):
                     minutos: Option(int, "Digite a quantidade de minutos", required=True, min_value=0, max_value=59),
                     motivo: Option(str, "Digite o motivo da remoção de horas (Ficará em exibição no log)", required=True)):
 
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.respond('❌ Este usuário não é um funcionário registrado no sistema.', ephemeral=True)
+
         total = (int(horas) * 3600) + (int(minutos) * 60)
         await db.del_time(usuario.id, total)
 
@@ -202,10 +287,194 @@ class PicaPonto(commands.Cog):
         embed_log.set_author(name='LOG: Remoção de Horas', icon_url=self.client.user.display_avatar)
         await canal_log.send(embed=embed_log)
 
+    @commands.slash_command(description='[ADM] Registra um novo funcionário', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def novofunc(self, ctx: discord.ApplicationContext,
+                       usuario: Option(discord.Member, 'Selecione o usuário', required=True),
+                       patente: Option(str, 'Selecione a patente', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
+                       nome: Option(str, 'Nome do funcionário', required=True),
+                       motivo: Option(str, 'Motivo da contratação', required=True)):
+        
+        await ctx.defer()
+        
+        patente_info = config["cargos_patentes"][patente]
+        letra = patente_info["letra"]
+        cargo_patente_id = patente_info["id"]
+        cargo_equipa_id = config.get("cargo_equipa_id")
+        
+        callsign = await db.get_next_callsign(letra)
+        
+        cargos_para_adicionar = []
+        cargo_patente = ctx.guild.get_role(cargo_patente_id)
+        if cargo_patente:
+            cargos_para_adicionar.append(cargo_patente)
+            
+        if cargo_equipa_id:
+            cargo_equipa = ctx.guild.get_role(cargo_equipa_id)
+            if cargo_equipa:
+                cargos_para_adicionar.append(cargo_equipa)
+                
+        if cargos_para_adicionar:
+            try:
+                await usuario.add_roles(*cargos_para_adicionar)
+            except discord.Forbidden:
+                return await ctx.followup.send("❌ Não tenho permissão para adicionar os cargos. O meu cargo precisa estar acima dos cargos que estou tentando adicionar.")
+                
+        novo_nick = f"[{callsign}] {nome}"
+        try:
+            await usuario.edit(nick=novo_nick)
+        except discord.Forbidden:
+            pass
+            
+        await db.add_funcionario(usuario.id, patente, callsign, nome)
+        
+        try:
+            await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você foi contratado(a) e registrado(a) no sistema!\n**→ Staff:** {ctx.author.mention}\n**→ Patente:** {patente_info["nome"]}\n**→ Callsign:** `{callsign}`\n**→ Motivo:** {motivo}')
+        except (discord.HTTPException, discord.Forbidden):
+            pass
+            
+        log_canal_id = config.get("log_contratacoes_id")
+        if log_canal_id:
+            log_canal = ctx.guild.get_channel(log_canal_id)
+            if log_canal:
+                embed_log = discord.Embed(title='LOG: Contratação', description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n**→ `Nova Patente`: {patente_info["nome"]}**\n**→ `Callsign`: {callsign}**\n**→ `Motivo`: {motivo}**', colour=discord.Colour.green())
+                embed_log.set_author(name='Contratação efetuada', icon_url=self.client.user.display_avatar)
+                await log_canal.send(embed=embed_log)
+        
+        embed = discord.Embed(title="✅ Funcionário Registrado", description=f"O funcionário {usuario.mention} foi registrado com sucesso!\n\n**Patente:** {patente_info['nome']}\n**Callsign:** `{callsign}`\n**Nome:** {nome}\n**Motivo:** {motivo}", color=discord.Colour.green())
+        await ctx.followup.send(embed=embed)
+
+    @commands.slash_command(description='[ADM] Despede/Remove um funcionário', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def despedir(self, ctx: discord.ApplicationContext,
+                          usuario: Option(discord.Member, 'Selecione o usuário', required=True),
+                          motivo: Option(str, 'Motivo do despedimento', required=True)):
+        
+        await ctx.defer()
+        
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.followup.send("❌ Este usuário não está registrado como funcionário.")
+            
+        patente_info = config["cargos_patentes"].get(func[0])
+        
+        cargos_para_remover = []
+        if patente_info:
+            cargo_patente = ctx.guild.get_role(patente_info["id"])
+            if cargo_patente:
+                cargos_para_remover.append(cargo_patente)
+                
+        cargo_equipa_id = config.get("cargo_equipa_id")
+        if cargo_equipa_id:
+            cargo_equipa = ctx.guild.get_role(cargo_equipa_id)
+            if cargo_equipa:
+                cargos_para_remover.append(cargo_equipa)
+                
+        if cargos_para_remover:
+            try:
+                await usuario.remove_roles(*cargos_para_remover)
+            except discord.Forbidden:
+                pass
+                
+        try:
+            await usuario.edit(nick=None)
+        except discord.Forbidden:
+            pass
+            
+        await db.remove_funcionario(usuario.id)
+        
+        try:
+            await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você foi despedido(a) e removido(a) do sistema!\n**→ Staff:** {ctx.author.mention}\n**→ Motivo:** {motivo}')
+        except (discord.HTTPException, discord.Forbidden):
+            pass
+            
+        log_canal_id = config.get("log_contratacoes_id")
+        if log_canal_id:
+            log_canal = ctx.guild.get_channel(log_canal_id)
+            if log_canal:
+                embed_log = discord.Embed(title='LOG: Despedimento', description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n**→ `Motivo`: {motivo}**', colour=discord.Colour.red())
+                embed_log.set_author(name='Despedimento efetuado', icon_url=self.client.user.display_avatar)
+                await log_canal.send(embed=embed_log)
+        
+        embed = discord.Embed(title="✅ Funcionário Removido", description=f"O funcionário {usuario.mention} foi removido com sucesso!\n\n**Motivo:** {motivo}", color=discord.Colour.red())
+        await ctx.followup.send(embed=embed)
+
+    @commands.slash_command(description='[ADM] Promove/Altera a patente de um funcionário', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def promover(self, ctx: discord.ApplicationContext,
+                       usuario: Option(discord.Member, 'Selecione o usuário', required=True),
+                       nova_patente: Option(str, 'Selecione a nova patente', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
+                       motivo: Option(str, 'Motivo da promoção/alteração', required=True)):
+        
+        await ctx.defer()
+        
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.followup.send("❌ Este usuário não está registrado como funcionário.")
+            
+        patente_antiga_key = func[0]
+        nome_func = func[2]
+        
+        if patente_antiga_key == nova_patente:
+            return await ctx.followup.send("❌ Este usuário já possui essa patente.")
+            
+        patente_antiga_info = config["cargos_patentes"].get(patente_antiga_key)
+        nova_patente_info = config["cargos_patentes"][nova_patente]
+        
+        cargos_para_remover = []
+        if patente_antiga_info:
+            cargo_antigo = ctx.guild.get_role(patente_antiga_info["id"])
+            if cargo_antigo:
+                cargos_para_remover.append(cargo_antigo)
+                
+        cargos_para_adicionar = []
+        cargo_novo = ctx.guild.get_role(nova_patente_info["id"])
+        if cargo_novo:
+            cargos_para_adicionar.append(cargo_novo)
+            
+        try:
+            if cargos_para_remover:
+                await usuario.remove_roles(*cargos_para_remover)
+            if cargos_para_adicionar:
+                await usuario.add_roles(*cargos_para_adicionar)
+        except discord.Forbidden:
+            pass
+            
+        novo_callsign = await db.get_next_callsign(nova_patente_info["letra"])
+        
+        novo_nick = f"[{novo_callsign}] {nome_func}"
+        try:
+            await usuario.edit(nick=novo_nick)
+        except discord.Forbidden:
+            pass
+            
+        await db.add_funcionario(usuario.id, nova_patente, novo_callsign, nome_func)
+        
+        try:
+            await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você teve a sua patente alterada!\n**→ Staff:** {ctx.author.mention}\n**→ Nova Patente:** {nova_patente_info["nome"]}\n**→ Novo Callsign:** `{novo_callsign}`\n**→ Motivo:** {motivo}')
+        except (discord.HTTPException, discord.Forbidden):
+            pass
+            
+        log_canal_id = config.get("log_contratacoes_id")
+        if log_canal_id:
+            log_canal = ctx.guild.get_channel(log_canal_id)
+            if log_canal:
+                embed_log = discord.Embed(title='LOG: Promoção/Alteração de Patente', description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n**→ `Patente Antiga`: {patente_antiga_info["nome"] if patente_antiga_info else "Desconhecida"}**\n**→ `Nova Patente`: {nova_patente_info["nome"]}**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Motivo`: {motivo}**', colour=discord.Colour.blue())
+                embed_log.set_author(name='Promoção efetuada', icon_url=self.client.user.display_avatar)
+                await log_canal.send(embed=embed_log)
+        
+        embed = discord.Embed(title="✅ Funcionário Promovido", description=f"O funcionário {usuario.mention} teve a sua patente alterada!\n\n**Patente Antiga:** {patente_antiga_info['nome'] if patente_antiga_info else 'Desconhecida'}\n**Nova Patente:** {nova_patente_info['nome']}\n**Novo Callsign:** `{novo_callsign}`\n**Motivo:** {motivo}", color=discord.Colour.green())
+        await ctx.followup.send(embed=embed)
+
+
 
     @commands.slash_command(description='[ADM] Reseta as horas do pica-ponto de um determinado usuário', contexts={discord.InteractionContextType.guild})
     @commands.has_any_role(config['staff_role_id'])
     async def resetar_usuario(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True)):
+
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.respond('❌ Este usuário não é um funcionário registrado no sistema.', ephemeral=True)
 
         await db.set_time(usuario.id, 0)
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você resetou as horas de {usuario.mention}.')
@@ -232,7 +501,16 @@ class PicaPonto(commands.Cog):
         for index, user in enumerate(top10):
             horas, minutos = int(user[1] // 3600), int((user[1] % 3600) // 60)
             
-            embed.add_field(name=f'{index+1}º Lugar', value=f'<@{user[0]}> - `{horas}h:{minutos}m`', inline=False)
+            func_db = await db.get_funcionario(user[0])
+            pagamento_str = ""
+            if func_db:
+                patente_info = config.get("cargos_patentes", {}).get(func_db[0])
+                if patente_info:
+                    valor_hora = patente_info.get("valor_hora", 0)
+                    pagamento = (user[1] / 3600) * valor_hora
+                    pagamento_str = f' - 💰 `{formatar_moeda(pagamento)}`'
+            
+            embed.add_field(name=f'{index+1}º Lugar', value=f'<@{user[0]}> - `{horas}h:{minutos}m`{pagamento_str}', inline=False)
             
         await ctx.respond(embed=embed)
 
@@ -297,6 +575,13 @@ class PicaPonto(commands.Cog):
         if not dados:
             return await ctx.respond('❌ Este usuário ainda não possui nenhum registro salvo.', ephemeral=True)
 
+        func_db = await db.get_funcionario(usuario.id)
+        valor_hora = 0
+        if func_db:
+            patente_info = config.get("cargos_patentes", {}).get(func_db[0])
+            if patente_info:
+                valor_hora = patente_info.get("valor_hora", 0)
+
         registros_por_dia = {}
         total_dia_segundos = {}
         total_semana_segundos = 0
@@ -332,9 +617,14 @@ class PicaPonto(commands.Cog):
         hr_total = str(total_semana_segundos // 3600).zfill(2)
         mins_total = str((total_semana_segundos % 3600) // 60).zfill(2)
         
+        desc = f'Funcionário: {usuario.mention}\n⏱️ **Tempo Total na Semana: `{hr_total}h {mins_total}m`**'
+        if valor_hora > 0:
+            pagamento_total = (total_semana_segundos / 3600) * valor_hora
+            desc += f'\n💰 **Pagamento Semanal: `{formatar_moeda(pagamento_total)}`**'
+            
         embed = discord.Embed(
             title='📋 Registros de Pica-Ponto',
-            description=f'Funcionário: {usuario.mention}\n⏱️ **Tempo Total na Semana: `{hr_total}h {mins_total}m`**',
+            description=desc,
             color=discord.Colour.yellow()
         )
         embed.set_thumbnail(url=usuario.display_avatar)
@@ -348,7 +638,13 @@ class PicaPonto(commands.Cog):
             seg_dia = total_dia_segundos.get(dia, 0)
             hr_dia = str(seg_dia // 3600).zfill(2)
             min_dia = str((seg_dia % 3600) // 60).zfill(2)
-            embed.add_field(name=f'📅 {dia}  —  ⏱️ `{hr_dia}h {min_dia}m`', value=campo_valor.strip(), inline=False)
+            
+            titulo_campo = f'📅 {dia}  —  ⏱️ `{hr_dia}h {min_dia}m`'
+            if valor_hora > 0:
+                pagamento_dia = (seg_dia / 3600) * valor_hora
+                titulo_campo += f'  —  💰 `{formatar_moeda(pagamento_dia)}`'
+                
+            embed.add_field(name=titulo_campo, value=campo_valor.strip(), inline=False)
         
         embed.set_footer(text='🟡 = Fechado por staff  |  Horários no fuso configurado')
         await ctx.respond(embed=embed, ephemeral=True)
@@ -639,6 +935,33 @@ class BotoesSemana(View):
             )
         except Exception as e:
             await inter.channel.send(f'\u274c Erro ao enviar backup: `{e}`')
+
+        # PDF do Relatório
+        try:
+            pdf_path = await gerar_pdf_semanal(self.top_todos, inter.guild)
+            if pdf_path:
+                await inter.channel.send(
+                    content='\U0001f4c4 **Relatório Semanal Completo em PDF:**',
+                    file=discord.File(pdf_path)
+                )
+                dono_id = config.get("owner_id")
+                if dono_id:
+                    dono = inter.client.get_user(dono_id)
+                    if not dono:
+                        try:
+                            dono = await inter.client.fetch_user(dono_id)
+                        except:
+                            pass
+                    if dono:
+                        try:
+                            await dono.send(
+                                content='\U0001f4c4 **Relatório Semanal Completo em PDF:**',
+                                file=discord.File(pdf_path)
+                            )
+                        except Exception as e:
+                            print(f"Erro ao enviar PDF para o dono: {e}")
+        except Exception as e:
+            await inter.channel.send(f'\u274c Erro ao gerar PDF: `{e}`')
 
     @discord.ui.button(label='\u2714\ufe0f Confirmar', style=discord.ButtonStyle.danger)
     async def confirmar_callback(self, button, inter: discord.Interaction):
