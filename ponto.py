@@ -52,12 +52,13 @@ async def gerar_pdf_semanal(top_todos, guild):
             if membro:
                 nome_func = membro.display_name
                 
-        pagamento_semana = (total_seg / 3600) * valor_hora
-        total_semana_geral += total_seg
-        total_pagamento_geral += pagamento_semana
-        
         horas_total = int(total_seg // 3600)
         minutos_total = int((total_seg % 3600) // 60)
+        
+        mins_pagar = horas_total * 60 + minutos_total
+        pagamento_semana = (mins_pagar / 60) * valor_hora
+        total_semana_geral += (mins_pagar * 60)
+        total_pagamento_geral += pagamento_semana
         
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, txt=f"Funcionario: {nome_func}", ln=1, align='L')
@@ -71,10 +72,13 @@ async def gerar_pdf_semanal(top_todos, guild):
             por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
             
         for dia, seg_dia in sorted(por_dia.items()):
-            h_dia = int(seg_dia // 3600)
-            m_dia = int((seg_dia % 3600) // 60)
-            pagamento_dia = (seg_dia / 3600) * valor_hora
-            pdf.cell(200, 6, txt=f"  - {dia}: {h_dia}h {m_dia}m | A receber: {formatar_moeda_pdf(pagamento_dia)}", ln=1, align='L')
+            sign = "-" if seg_dia < 0 else ""
+            abs_seg = abs(seg_dia)
+            h_dia = int(abs_seg // 3600)
+            m_dia = int((abs_seg % 3600) // 60)
+            mins_dia_pagar = h_dia * 60 + m_dia
+            pagamento_dia = (mins_dia_pagar / 60) * valor_hora * (-1 if seg_dia < 0 else 1)
+            pdf.cell(200, 6, txt=f"  - {dia}: {sign}{h_dia}h {m_dia}m | A receber: {formatar_moeda_pdf(pagamento_dia)}", ln=1, align='L')
             
         pdf.cell(200, 5, txt="", ln=1)
         
@@ -379,6 +383,9 @@ class PicaPonto(commands.Cog):
 
         total = (int(horas) * 3600) + (int(minutos) * 60)
         await db.add_time(usuario.id, total)
+        
+        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        await db.create_registry(usuario.id, agora, agora, 2, total, "[]")
 
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você adicionou `{horas}` horas e `{minutos}` minutos para {usuario.mention}.')
         try:
@@ -406,6 +413,9 @@ class PicaPonto(commands.Cog):
 
         total = (int(horas) * 3600) + (int(minutos) * 60)
         await db.del_time(usuario.id, total)
+        
+        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        await db.create_registry(usuario.id, agora, agora, 3, -total, "[]")
 
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você removeu `{horas}` horas e `{minutos}` minutos de {usuario.mention}.')
         try:
@@ -801,7 +811,7 @@ class PicaPonto(commands.Cog):
                 patente_info = config.get("cargos_patentes", {}).get(func_db[0])
                 if patente_info:
                     valor_hora = patente_info.get("valor_hora", 0)
-                    pagamento = (user[1] / 3600) * valor_hora
+                    pagamento = ((horas * 60 + minutos) / 60) * valor_hora
                     pagamento_str = f' - 💰 `{formatar_moeda(pagamento)}`'
             
             embed.add_field(name=f'{index+1}º Lugar', value=f'<@{user[0]}> - `{horas}h:{minutos}m`{pagamento_str}', inline=False)
@@ -885,6 +895,24 @@ class PicaPonto(commands.Cog):
             hr_fim = datetime.datetime.fromtimestamp(k[1], timezone(config["timezone"])).strftime("%H:%M")
             data_str = datetime.datetime.fromtimestamp(k[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
             
+            total_semana_segundos += k[3]
+            total_dia_segundos[data_str] = total_dia_segundos.get(data_str, 0) + k[3]
+
+            if data_str not in registros_por_dia:
+                registros_por_dia[data_str] = []
+
+            if k[2] == 2:
+                hr = str(k[3] // 3600).zfill(2)
+                mins = str((k[3] % 3600) // 60).zfill(2)
+                registros_por_dia[data_str].append(f'➕ **Horas Adicionadas (Staff):** `{hr}h {mins}m`')
+                continue
+            elif k[2] == 3:
+                duracao_abs = abs(k[3])
+                hr = str(duracao_abs // 3600).zfill(2)
+                mins = str((duracao_abs % 3600) // 60).zfill(2)
+                registros_por_dia[data_str].append(f'➖ **Horas Removidas (Staff):** `{hr}h {mins}m`')
+                continue
+
             staff = True if k[2] == 1 else False
             duracao = k[3]
             pausas_str = k[4] if len(k) > 4 else '[]'
@@ -896,24 +924,21 @@ class PicaPonto(commands.Cog):
             hr = str(duracao // 3600).zfill(2)
             mins = str((duracao % 3600) // 60).zfill(2)
             
-            total_semana_segundos += duracao
-            total_dia_segundos[data_str] = total_dia_segundos.get(data_str, 0) + duracao
-
-            if data_str not in registros_por_dia:
-                registros_por_dia[data_str] = []
-                
             registros_por_dia[data_str].append(f'🟢 `{hr_inicio}` → `{hr_fim}`  **({hr}h {mins}m)**{"  🟡" if staff else ""}')
             for p in pausas:
                 p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%H:%M")
                 p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
                 registros_por_dia[data_str].append(f'  ╰ ⏸️ Pausa: `{p_in}` → Volta: `{p_out}`')
 
-        hr_total = str(total_semana_segundos // 3600).zfill(2)
-        mins_total = str((total_semana_segundos % 3600) // 60).zfill(2)
+        sign_total = "-" if total_semana_segundos < 0 else ""
+        abs_total = abs(total_semana_segundos)
+        hr_total = str(abs_total // 3600).zfill(2)
+        mins_total = str((abs_total % 3600) // 60).zfill(2)
         
-        desc = f'Funcionário: {usuario.mention}\n⏱️ **Tempo Total na Semana: `{hr_total}h {mins_total}m`**'
+        desc = f'Funcionário: {usuario.mention}\n⏱️ **Tempo Total na Semana: `{sign_total}{hr_total}h {mins_total}m`**'
         if valor_hora > 0:
-            pagamento_total = (total_semana_segundos / 3600) * valor_hora
+            mins_pagar = (abs_total // 3600) * 60 + ((abs_total % 3600) // 60)
+            pagamento_total = (mins_pagar / 60) * valor_hora * (-1 if total_semana_segundos < 0 else 1)
             desc += f'\n💰 **Pagamento Semanal: `{formatar_moeda(pagamento_total)}`**'
             
         embed = discord.Embed(
@@ -930,12 +955,15 @@ class PicaPonto(commands.Cog):
             if len(campo_valor) > 1024:
                 campo_valor = campo_valor[:1020] + '...'
             seg_dia = total_dia_segundos.get(dia, 0)
-            hr_dia = str(seg_dia // 3600).zfill(2)
-            min_dia = str((seg_dia % 3600) // 60).zfill(2)
+            sign_dia = "-" if seg_dia < 0 else ""
+            abs_seg = abs(seg_dia)
+            hr_dia = str(abs_seg // 3600).zfill(2)
+            min_dia = str((abs_seg % 3600) // 60).zfill(2)
             
-            titulo_campo = f'📅 {dia}  —  ⏱️ `{hr_dia}h {min_dia}m`'
+            titulo_campo = f'📅 {dia}  —  ⏱️ `{sign_dia}{hr_dia}h {min_dia}m`'
             if valor_hora > 0:
-                pagamento_dia = (seg_dia / 3600) * valor_hora
+                mins_pagar = (abs_seg // 3600) * 60 + ((abs_seg % 3600) // 60)
+                pagamento_dia = (mins_pagar / 60) * valor_hora * (-1 if seg_dia < 0 else 1)
                 titulo_campo += f'  —  💰 `{formatar_moeda(pagamento_dia)}`'
                 
             embed.add_field(name=titulo_campo, value=campo_valor.strip(), inline=False)
@@ -1196,8 +1224,10 @@ class BotoesSemana(View):
             for user_data in self.top_todos:
                 user_id = user_data[0]
                 total_seg = user_data[1]
-                horas_total = int(total_seg // 3600)
-                minutos_total = int((total_seg % 3600) // 60)
+                sign_total = "-" if total_seg < 0 else ""
+                abs_total = abs(total_seg)
+                horas_total = int(abs_total // 3600)
+                minutos_total = int((abs_total % 3600) // 60)
 
                 registros = await db.get_all_user_registries(user_id)
                 por_dia = {}
@@ -1206,15 +1236,17 @@ class BotoesSemana(View):
                     por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
 
                 embed_user = discord.Embed(
-                    description=f'<@{user_id}>\n\u23f1\ufe0f **Total Semanal: `{str(horas_total).zfill(2)}h {str(minutos_total).zfill(2)}m`**',
+                    description=f'<@{user_id}>\n\u23f1\ufe0f **Total Semanal: `{sign_total}{str(horas_total).zfill(2)}h {str(minutos_total).zfill(2)}m`**',
                     color=discord.Colour.blurple()
                 )
                 for dia, seg_dia in sorted(por_dia.items()):
-                    h_dia = int(seg_dia // 3600)
-                    m_dia = int((seg_dia % 3600) // 60)
+                    sign_dia = "-" if seg_dia < 0 else ""
+                    abs_seg = abs(seg_dia)
+                    h_dia = int(abs_seg // 3600)
+                    m_dia = int((abs_seg % 3600) // 60)
                     embed_user.add_field(
                         name=f'\U0001f4c5 {dia}',
-                        value=f'`{str(h_dia).zfill(2)}h {str(m_dia).zfill(2)}m`',
+                        value=f'`{sign_dia}{str(h_dia).zfill(2)}h {str(m_dia).zfill(2)}m`',
                         inline=True
                     )
                 await inter.channel.send(embed=embed_user)
