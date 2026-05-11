@@ -106,6 +106,14 @@ python main.py
 
 ---
 
+### 🌐 Comandos Gerais
+
+| Comando | Descrição |
+|---|---|
+| `/ping` | Mostra a latência atual (ms) e o status online do bot. |
+
+---
+
 ### 🔴 Comandos de Staff
 > Requerem o cargo definido em `staff_role_id`
 
@@ -121,6 +129,10 @@ python main.py
 | `/ranking` | Exibe o ranking das top 10 pessoas com mais horas na semana atual e os seus **pagamentos semanais**. |
 | `/semana` | Gera o **relatório semanal financeiro (PDF)** com as horas/pagamentos diários de cada funcionário, e envia um backup da base de dados. **Os dados não são apagados.** |
 | `/resetarsemana` | Executa o encerramento completo da semana: **gera PDF completo**, envia no canal e na DM do Dono e faz backup. Por fim, **reseta as horas e tempos (mas não as contas de funcionários)**. |
+| `/autocorrecao` | Força a verificação e correção automática do registo (callsign, patente, etc) de todos os funcionários no servidor. |
+| `/addrole` | Adiciona um cargo específico a um usuário selecionado. Requer permissão de Administrador. |
+| `/clear` | Limpa uma quantidade definida de mensagens no canal. Requer permissão de Gerenciar Mensagens. |
+| `/embed` | Abre um painel interativo para criar e enviar mensagens formatadas em Embed no canal atual. Requer permissão de Administrador. |
 
 ---
 

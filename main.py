@@ -103,7 +103,8 @@ async def on_ready():
         except Exception as e:
             print("Erro ao enviar aviso de reinício:", e)
 
-    await att_status()
+    if not hasattr(client, 'status_task'):
+        client.status_task = client.loop.create_task(att_status())
 
 @client.event
 async def on_application_command(ctx: discord.ApplicationContext):
@@ -150,7 +151,10 @@ async def on_application_command_error(ctx: discord.ApplicationContext, error: d
         comando = ctx.command
     embedlog = discord.Embed(title='ERRO!', description=f'Comando utilizado: `{comando}`\nServidor: `{ctx.guild.name} / {ctx.guild.id}`\nCanal do comando: `{ctx.channel} / {ctx.channel.id}`\nAutor do comando: {ctx.author.mention} `/ {ctx.author.id}`\n\n**ERRO:**\n```py\n{error}\n```', color=discord.Colour.red())
     embedlog.set_footer(text='Developed by andyydias')
-    await canallog.send(embed=embedlog)
+    if canallog:
+        await canallog.send(embed=embedlog)
+    else:
+        print(f"[ERRO] Canal de logs (ID: {config['log_channel_id']}) não encontrado. Erro ao executar {comando}: {error}")
 
 @client.slash_command(description='[ADM] Adiciona cargo a um usuário', contexts={discord.InteractionContextType.guild})
 @commands.has_guild_permissions(administrator=True)
