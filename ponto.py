@@ -98,9 +98,6 @@ def save_active_pontos():
 class PicaPonto(commands.Cog):
     def __init__(self, client):
         self.client = client
-        self.auto_close_task.start()
-        self.auto_backup_task.start()
-        self.auto_register_task.start()
 
     def cog_unload(self):
         self.auto_close_task.cancel()
@@ -273,6 +270,13 @@ class PicaPonto(commands.Cog):
         await db.setup_db()
         self.client.add_view(view=finalizarPonto())
         await self.fechar_pontos_pendentes()
+        
+        if not self.auto_close_task.is_running():
+            self.auto_close_task.start()
+        if not self.auto_backup_task.is_running():
+            self.auto_backup_task.start()
+        if not self.auto_register_task.is_running():
+            self.auto_register_task.start()
 
     async def fechar_pontos_pendentes(self):
         import os

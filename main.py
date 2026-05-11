@@ -11,9 +11,11 @@ if "--run-bot" not in sys.argv:
         try:
             with open(WATCHER_LOCK, "r") as f:
                 old_pid = int(f.read().strip())
-            output = os.popen(f'tasklist /FI "PID eq {old_pid}"').read()
-            if "python" in output.lower():
+            try:
+                os.kill(old_pid, 0)
                 os.kill(old_pid, signal.SIGTERM)
+            except OSError:
+                pass
         except Exception:
             pass
 
@@ -47,9 +49,11 @@ if os.path.exists(LOCK_FILE):
         with open(LOCK_FILE, "r") as f:
             old_pid = int(f.read().strip())
         
-        output = os.popen(f'tasklist /FI "PID eq {old_pid}"').read()
-        if "python" in output.lower():
+        try:
+            os.kill(old_pid, 0)
             os.kill(old_pid, signal.SIGTERM)
+        except OSError:
+            pass
     except Exception:
         pass
 
@@ -67,12 +71,6 @@ from discord.commands import Option
 from discord.ui import InputText, Modal, Button, View
 from datetime import datetime
 from db import get_configs
-
-try:
-    loop = asyncio.get_event_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
 
 client = commands.Bot(command_prefix=".", help_command=None, intents=discord.Intents().all())
 client.load_extension('ponto')
