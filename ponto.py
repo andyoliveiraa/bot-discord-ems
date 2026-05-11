@@ -610,6 +610,110 @@ class PicaPonto(commands.Cog):
 
         await ctx.respond(view=BotoesReset())
 
+    @commands.slash_command(name="autocorrecao", description='[ADM] Força a auto-correção e auto-registro de todos os funcionários', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def force_autocorrecao(self, ctx: discord.ApplicationContext):
+        await ctx.defer()
+        
+        guild = ctx.guild
+        funcionarios_db = await db.get_all_funcionarios()
+        ids_registrados = [f[0] for f in funcionarios_db]
+
+        registrados = 0
+        corrigidos = 0
+
+        for member in guild.members:
+            if member.bot:
+                continue
+
+            # Obter patente correspondente ao cargo atual
+            patente_atual_key = None
+            patente_atual_info = None
+            for p_key, p_info in config.get("cargos_patentes", {}).items():
+                if p_info.get("id") and any(r.id == p_info["id"] for r in member.roles):
+                    patente_atual_key = p_key
+                    patente_atual_info = p_info
+                    break
+
+            if not patente_atual_key:
+                continue # Não tem patente
+
+            func_db = next((f for f in funcionarios_db if f[0] == member.id), None)
+            
+            if not func_db:
+                # Tenta extrair callsign e nome do nick: [Callsign] Nome
+                nick_atual = member.display_name
+                match = re.match(r'^\[(.*?)\]\s+(.*)', nick_atual)
+                
+                if match:
+                    callsign = match.group(1)
+                    nome = match.group(2)
+                else:
+                    continue
+
+                await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
+                registrados += 1
+                
+                log_canal_id = config.get("log_contratacoes_id")
+                if log_canal_id:
+                    log_canal = guild.get_channel(log_canal_id)
+                    if log_canal:
+                        embed_log = discord.Embed(
+                            title='LOG: Auto-Registro Efetuado',
+                            description=f'**→ `Sistema`: Auto-Registro (Manual)**\n**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {member.mention}**\n**→ `Patente Detectada`: {patente_atual_info["nome"]}**\n**→ `Callsign Extraído`: {callsign}**',
+                            colour=discord.Colour.green()
+                        )
+                        await log_canal.send(embed=embed_log)
+            else:
+                velho_callsign = func_db[2]
+                try:
+                    velha_letra, velho_num_str = velho_callsign.split('-')
+                    velho_num = int(velho_num_str)
+                except:
+                    continue
+                    
+                letra_correta = patente_atual_info["letra"]
+                
+                if velha_letra != letra_correta:
+                    novo_callsign = await db.get_next_callsign(letra_correta)
+                    nome_func = func_db[3]
+                    
+                    await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome_func)
+                    
+                    shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
+                    for s_user_id, s_novo_callsign, s_nome in shifted_users:
+                        try:
+                            s_member = guild.get_member(s_user_id) or await guild.fetch_member(s_user_id)
+                            await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+                        except:
+                            pass
+                    
+                    try:
+                        await member.edit(nick=f"[{novo_callsign}] {nome_func}")
+                    except:
+                        pass
+                        
+                    corrigidos += 1
+                        
+                    log_canal_id = config.get("log_contratacoes_id")
+                    if log_canal_id:
+                        log_canal = guild.get_channel(log_canal_id)
+                        if log_canal:
+                            embed_log = discord.Embed(
+                                title='LOG: Auto-Correção de Callsign',
+                                description=f'**→ `Sistema`: Auto-Correção (Manual)**\n**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Antigo`: {velho_callsign}**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
+                                colour=discord.Colour.blue()
+                            )
+                            await log_canal.send(embed=embed_log)
+
+        embed = discord.Embed(
+            title="✅ Verificação Concluída", 
+            description=f"A verificação manual de auto-correção e auto-registro foi finalizada com sucesso!\n\n**Novos Registros:** `{registrados}`\n**Callsigns Corrigidos:** `{corrigidos}`", 
+            color=discord.Colour.green()
+        )
+        await ctx.followup.send(embed=embed)
+
+
     @commands.slash_command(description='Retorna o ranking das top 10 pessoas com mais horas na semana.', contexts={discord.InteractionContextType.guild})
     async def ranking(self, ctx: discord.ApplicationContext):
 
