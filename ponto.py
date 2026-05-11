@@ -287,9 +287,9 @@ class PicaPonto(commands.Cog):
         embed_log.set_author(name='LOG: Remoção de Horas', icon_url=self.client.user.display_avatar)
         await canal_log.send(embed=embed_log)
 
-    @commands.slash_command(description='[ADM] Registra um novo funcionário', contexts={discord.InteractionContextType.guild})
+    @commands.slash_command(name="contratar", description='[ADM] Registra um novo funcionário', contexts={discord.InteractionContextType.guild})
     @commands.has_any_role(config['staff_role_id'])
-    async def novofunc(self, ctx: discord.ApplicationContext,
+    async def contratar(self, ctx: discord.ApplicationContext,
                        usuario: Option(discord.Member, 'Selecione o usuário', required=True),
                        patente: Option(str, 'Selecione a patente', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
                        nome: Option(str, 'Nome do funcionário', required=True),

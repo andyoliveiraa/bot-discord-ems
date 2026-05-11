@@ -18,7 +18,7 @@ Bot de registo de horas de serviço desenvolvido para servidores de roleplay. Pe
 - 📅 Relatório semanal completo em PDF com cálculo financeiro (`/semana`)
 - 🔁 Reset semanal com backup e limpeza de horas, mantendo o registo de funcionários (`/resetarsemana`)
 - 💽 Backup automático diário às **07:00** enviado no canal de logs e por DM ao dono
-- 👥 Sistema Integrado de RH: `/novofunc`, `/despedir`, `/promover`
+- 👥 Sistema Integrado de RH: `/contratar`, `/despedir`, `/promover`
 - 💶 Cálculo automático de pagamentos por horas trabalhadas e patentes
 - 🎫 Sistema de tickets integrado com painel de controlo em Português
 - 🛡️ Watcher de auto-restart (o bot reinicia sozinho em caso de crash)
@@ -113,7 +113,7 @@ python watcher.py
 
 | Comando | Descrição |
 |---|---|
-| `/novofunc` | Regista um novo funcionário no sistema, gera um indicativo (Callsign), adiciona cargos de patente e altera o apelido automaticamente. Exige motivo e notifica por DM e canal de logs. |
+| `/contratar` | Regista um novo funcionário no sistema, gera um indicativo (Callsign), adiciona cargos de patente e altera o apelido automaticamente. Exige motivo e notifica por DM e canal de logs. |
 | `/despedir` | Remove um funcionário do sistema. Limpa a callsign (que ficará disponível para a próxima pessoa), retira os cargos e envia a notificação no canal e DM informando o motivo. |
 | `/promover` | Altera a patente do funcionário. Modifica o cargo, regenera a callsign e atualiza o apelido do Discord. Pede um motivo que é enviado na DM e canal de logs. |
 | `/addtempo` | Adiciona horas e minutos ao total semanal de um funcionário registrado. O funcionário recebe uma DM informando a alteração e o motivo inserido pelo staff. |
