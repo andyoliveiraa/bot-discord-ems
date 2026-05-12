@@ -1044,6 +1044,93 @@ class PicaPonto(commands.Cog):
         save_active_pontos()
 
 
+class OpcoesFechamentoStaff(View):
+    def __init__(self, target_user_id: int, original_message: discord.Message):
+        super().__init__(timeout=120.0)
+        self.target_user_id = target_user_id
+        self.original_message = original_message
+
+    async def fechar_ponto(self, inter: discord.Interaction, contabiliza: bool):
+        user_id = self.target_user_id
+        if user_id not in active_pontos or active_pontos[user_id]["msg_id"] != self.original_message.id:
+            return await inter.response.send_message("❌ O ponto já foi encerrado ou expirou.", ephemeral=True)
+            
+        await inter.response.defer()
+        estado = active_pontos[user_id]
+        try:
+            horario_atual = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+            if estado["status"] == "pausado":
+                duracao_pausa = horario_atual - estado["inicio_pausa"]
+                estado["total_pausa"] += duracao_pausa
+                estado["pausas"].append([estado["inicio_pausa"], horario_atual])
+                
+            horario_inicio = estado["inicio"]
+            segundos_totais = horario_atual - horario_inicio - estado["total_pausa"]
+            if segundos_totais < 0: segundos_totais = 0
+            horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
+            active_pontos.pop(user_id)
+            save_active_pontos()
+            
+            user = inter.guild.get_member(int(user_id))
+            
+            if contabiliza:
+                await db.add_time(int(user_id), segundos_totais)
+            
+            import json
+            pauses_json = json.dumps(estado["pausas"])
+            await db.create_registry(int(user_id), horario_inicio, horario_atual, True, segundos_totais, pauses_json)
+            
+            canal_log = inter.guild.get_channel(config["log_channel_id"])
+            data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+            pausas_desc = ''
+            for p in estado["pausas"]:
+                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")
+                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+                pausas_desc += f'\n**→ `Pausa`: {p_in} \u2192 Volta: {p_out}**'
+            
+            if contabiliza:
+                log_desc = f'**→ `Status Pica-Ponto`: Fechado por {inter.user.mention}** *(horas contabilizadas)*'
+                log_color = discord.Colour.green()
+                aviso_obs = 'Suas horas foram contabilizadas.'
+            else:
+                log_desc = f'**→ `Status Pica-Ponto`: Fechado por {inter.user.mention}** *(horas não contabilizadas)*'
+                log_color = discord.Colour.yellow()
+                aviso_obs = 'Suas horas não foram contabilizadas.'
+                
+            embed_log = discord.Embed(description=f'{log_desc}\n**→ `Funcionário`: {user.mention}**\n'
+                f'**→ `Horário de Abertura`: {data_abertura}**\n'
+                f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
+                f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**'
+                + pausas_desc, colour=log_color)
+            embed_log.set_author(name='LOG: Pica-Ponto fechado por Alto Comando/Staff', icon_url=inter.user.display_avatar)
+            
+            if canal_log:
+                await canal_log.send(embed=embed_log)
+                
+            if user:
+                try:
+                    await user.send(f'**<:aviso:1269036173381206132> AVISO:** Seu pica-ponto foi finalizado por: {inter.user.mention}!\n<:sirene:1269032464374829087>Tome cuidado em deixar o pica-ponto aberto ao sair de serviço. Em caso de dúvidas, procure o responsável por ter finalizado o seu ponto.\n> <:relogio:1269034530388574309> Tempo com pica-ponto aberto: **`{str(horas).zfill(2)} horas`** e **`{str(minutos).zfill(2)} minutos`**\n**`OBS`:** {aviso_obs}')
+                except Exception: pass
+                
+        except Exception as e:
+            print(e)
+            
+        try:
+            await self.original_message.delete()
+        except Exception: pass
+        
+        await inter.edit_original_response(content=f'<a:check:1269034091882221710> **Pica-ponto finalizado!** As horas {"foram" if contabiliza else "não foram"} contabilizadas.', view=None)
+
+
+    @discord.ui.button(label='Contabiliza', style=discord.ButtonStyle.success)
+    async def contabiliza_callback(self, button, inter: discord.Interaction):
+        await self.fechar_ponto(inter, contabiliza=True)
+
+    @discord.ui.button(label='Não Contabiliza', style=discord.ButtonStyle.danger)
+    async def nao_contabiliza_callback(self, button, inter: discord.Interaction):
+        await self.fechar_ponto(inter, contabiliza=False)
+
+
 class finalizarPonto(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -1116,44 +1203,11 @@ class finalizarPonto(View):
             for user_id, estado in list(active_pontos.items()):
                 if estado["msg_id"] == inter.message.id:
                     if inter.user.id != user_id:
-                        try:
-                            horario_atual = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
-                            if estado["status"] == "pausado":
-                                duracao_pausa = horario_atual - estado["inicio_pausa"]
-                                estado["total_pausa"] += duracao_pausa
-                                estado["pausas"].append([estado["inicio_pausa"], horario_atual])
-                                
-                            horario_inicio = estado["inicio"]
-                            segundos_totais = horario_atual - horario_inicio - estado["total_pausa"]
-                            if segundos_totais < 0: segundos_totais = 0
-                            horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
-                            active_pontos.pop(user_id)
-                            save_active_pontos()
-                            
-                            user = inter.guild.get_member(int(user_id))
-                            import json
-                            pauses_json = json.dumps(estado["pausas"])
-                            await db.create_registry(int(user_id), horario_inicio, horario_atual, True, segundos_totais, pauses_json)
-                            
-                            canal_log = inter.guild.get_channel(config["log_channel_id"])
-                            data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
-                            pausas_desc = ''
-                            for p in estado["pausas"]:
-                                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")
-                                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
-                                pausas_desc += f'\n**→ `Pausa`: {p_in} \u2192 Volta: {p_out}**'
-                            embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado por {inter.user.mention}** *(horas não contabilizadas)*\n**→ `Funcionário`: {user.mention}**\n'
-                                f'**→ `Horário de Abertura`: {data_abertura}**\n'
-                                f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
-                                f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**'
-                                + pausas_desc, colour=discord.Colour.yellow())
-                            embed_log.set_author(name='LOG: Pica-Ponto fechado por Alto Comando/Staff', icon_url=inter.user.display_avatar)
-                            await canal_log.send(embed=embed_log)
-                            await user.send(f'**<:aviso:1269036173381206132> AVISO:** Seu pica-ponto foi finalizado por: {inter.user.mention}!\n<:sirene:1269032464374829087>Tome cuidado em deixar o pica-ponto aberto ao sair de serviço. Em caso de dúvidas, procure o responsável por ter finalizado o seu ponto.\n> <:relogio:1269034530388574309> Tempo com pica-ponto aberto: **`{str(horas).zfill(2)} horas`** e **`{str(minutos).zfill(2)} minutos`**\n**`OBS`:** Suas horas não foram contabilizadas.')
-                        except Exception as e:
-                            print(e)
-                        await inter.message.delete()
-                        return await inter.response.send_message('<a:check:1269034091882221710> **Pica-ponto finalizado!** As horas não foram contabilizadas.', ephemeral=True)
+                        view_opcoes = OpcoesFechamentoStaff(user_id, inter.message)
+                        return await inter.response.send_message(
+                            f"Você está encerrando o ponto de <@{user_id}>. Deseja contabilizar as horas?",
+                            view=view_opcoes, ephemeral=True
+                        )
                     break
                     
         if inter.user.id not in active_pontos:
@@ -1163,7 +1217,10 @@ class finalizarPonto(View):
 
         estado = active_pontos[inter.user.id]
         
-        await inter.message.delete()
+        await inter.response.defer(ephemeral=True)
+        try:
+            await inter.message.delete()
+        except Exception: pass
 
         horario_atual = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
         if estado["status"] == "pausado":
@@ -1184,7 +1241,7 @@ class finalizarPonto(View):
         pauses_json = json.dumps(estado["pausas"])
         await db.create_registry(inter.user.id, horario_inicio, horario_atual, False, segundos_totais, pauses_json)
 
-        await inter.response.send_message(f'⏰ **Serviço finalizado!**\n⏰ Tempo total de serviço: `{horas}` horas e `{minutos}` minutos', ephemeral=True)
+        await inter.followup.send(f'⏰ **Serviço finalizado!**\n⏰ Tempo total de serviço: `{horas}` horas e `{minutos}` minutos', ephemeral=True)
 
         canal_log = inter.guild.get_channel(config["log_channel_id"])
 
