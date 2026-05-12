@@ -165,7 +165,7 @@ Ao reiniciar, o bot recupera automaticamente todos os pontos que estavam ativos:
 - 💾 Os dados de pontos ativos são guardados em `active_pontos.json`
 
 ### Encerramento forçado pela Staff
-A staff pode clicar no botão **Finalizar** no painel de qualquer funcionário para encerrar o turno remotamente. O funcionário recebe uma DM e as horas **não são contabilizadas**.
+A staff pode clicar no botão **Finalizar** no painel de qualquer funcionário para encerrar o turno remotamente. Será exibida uma confirmação (visível apenas para a staff) perguntando se desejam **Contabilizar** ou **Não Contabilizar** as horas daquele turno. O funcionário recebe uma DM com o resultado da decisão, e a ação ficará devidamente registada no canal de logs (verde se contabilizado, amarelo se não contabilizado).
 
 ---
 
