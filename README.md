@@ -164,8 +164,12 @@ Ao reiniciar, o bot recupera automaticamente todos os pontos que estavam ativos:
 - 📋 Um log é enviado ao canal de staff para cada ponto recuperado
 - 💾 Os dados de pontos ativos são guardados em `active_pontos.json`
 
-### Encerramento forçado pela Staff
-A staff pode clicar no botão **Finalizar** no painel de qualquer funcionário para encerrar o turno remotamente. Será exibida uma confirmação (visível apenas para a staff) perguntando se desejam **Contabilizar** ou **Não Contabilizar** as horas daquele turno. O funcionário recebe uma DM com o resultado da decisão, e a ação ficará devidamente registada no canal de logs (verde se contabilizado, amarelo se não contabilizado).
+### Intervenção da Staff (Pausa e Encerramento Forçado)
+A staff possui permissões avançadas sobre o painel de pica-ponto de qualquer funcionário:
+- **Pausar/Retomar**: Um staff pode clicar no botão **Pausar/Retomar** de outro funcionário para gerir as pausas do seu turno remotamente (evitando abusos de inatividade). O painel é atualizado mantendo corretamente a identificação do funcionário dono do ponto.
+- **Encerramento Forçado**: Um staff pode clicar no botão **Finalizar** para encerrar o turno remotamente. Será exibida uma confirmação perguntando se desejam **Contabilizar** ou **Não Contabilizar** as horas.
+  - Caso optem por **Não Contabilizar**, o tempo é guardado como `0` e não entra nos cálculos financeiros do funcionário. O relatório semanal e o PDF exibirão o ponto fechado como `Não Contabilizado`, detalhando qual staff realizou essa ação.
+  - O funcionário recebe uma DM com a decisão final e a ação é registada no canal de logs.
 
 ---
 

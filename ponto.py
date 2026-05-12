@@ -67,11 +67,16 @@ async def gerar_pdf_semanal(top_todos, guild):
         
         registros = await db.get_all_user_registries(user_id)
         por_dia = {}
+        nao_contabilizados = []
         for reg in registros:
             data_str = datetime.datetime.fromtimestamp(reg[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
             por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
             
+            if reg[3] == 0 and reg[2] and reg[2] > 10000:
+                nao_contabilizados.append((data_str, reg[2]))
+            
         for dia, seg_dia in sorted(por_dia.items()):
+            if seg_dia == 0: continue
             sign = "-" if seg_dia < 0 else ""
             abs_seg = abs(seg_dia)
             h_dia = int(abs_seg // 3600)
@@ -79,6 +84,12 @@ async def gerar_pdf_semanal(top_todos, guild):
             mins_dia_pagar = h_dia * 60 + m_dia
             pagamento_dia = (mins_dia_pagar / 60) * valor_hora * (-1 if seg_dia < 0 else 1)
             pdf.cell(200, 6, txt=f"  - {dia}: {sign}{h_dia}h {m_dia}m | A receber: {formatar_moeda_pdf(pagamento_dia)}", ln=1, align='L')
+            
+        for nc in nao_contabilizados:
+            data_str, staff_id = nc
+            membro = guild.get_member(staff_id)
+            nome_staff = membro.display_name if membro else f"ID: {staff_id}"
+            pdf.cell(200, 6, txt=f"  - {data_str}: 0h 0m | Fechado (Nao Contabilizado) por {nome_staff}", ln=1, align='L')
             
         pdf.cell(200, 5, txt="", ln=1)
         
@@ -1078,7 +1089,7 @@ class OpcoesFechamentoStaff(View):
             
             import json
             pauses_json = json.dumps(estado["pausas"])
-            await db.create_registry(int(user_id), horario_inicio, horario_atual, True, segundos_totais, pauses_json)
+            await db.create_registry(int(user_id), horario_inicio, horario_atual, inter.user.id, segundos_totais if contabiliza else 0, pauses_json)
             
             canal_log = inter.guild.get_channel(config["log_channel_id"])
             data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
@@ -1137,12 +1148,22 @@ class finalizarPonto(View):
 
     @discord.ui.button(label='Pausar', emoji='⏸️', style=discord.ButtonStyle.secondary, custom_id="button_pause")
     async def pause_callback(self, button, inter: discord.Interaction):
-        if inter.user.id not in active_pontos:
-            return await inter.response.send_message("❌ Seu pica-ponto expirou ou o bot foi reiniciado. Inicie um novo!", ephemeral=True)
-        if active_pontos[inter.user.id]["msg_id"] != inter.message.id:
-            return await inter.response.send_message("❌ Este não é o seu painel ativo mais recente.", ephemeral=True)
+        cargo_adm = inter.guild.get_role(config["staff_role_id"]) if inter.guild else None
+        is_staff = cargo_adm in inter.user.roles if cargo_adm and hasattr(inter.user, "roles") else False
+        
+        target_user_id = None
+        for u_id, est in active_pontos.items():
+            if est["msg_id"] == inter.message.id:
+                target_user_id = u_id
+                break
+                
+        if not target_user_id:
+            return await inter.response.send_message("❌ Este painel de pica-ponto expirou ou o bot foi reiniciado.", ephemeral=True)
             
-        estado = active_pontos[inter.user.id]
+        if inter.user.id != target_user_id and not is_staff:
+            return await inter.response.send_message("❌ Você não tem permissão para pausar o pica-ponto de outra pessoa.", ephemeral=True)
+            
+        estado = active_pontos[target_user_id]
         agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
         
         if estado["status"] == "ativo":
@@ -1166,10 +1187,15 @@ class finalizarPonto(View):
 
         save_active_pontos()
 
+        target_member = inter.guild.get_member(int(target_user_id)) if inter.guild else None
+        target_mention = target_member.mention if target_member else f"<@{target_user_id}>"
+        target_name = target_member.name if target_member else str(target_user_id)
+        target_avatar = target_member.display_avatar if target_member else None
+
         horario_inicio = estado["inicio"]
         display_horario = horario_inicio + estado["total_pausa"]
         
-        desc = f'**→ <:busts_in_silhouette:1269035235463397397> Funcionário:** {inter.user.mention}\n\n'
+        desc = f'**→ <:busts_in_silhouette:1269035235463397397> Funcionário:** {target_mention}\n\n'
         
         if estado["status"] == "pausado":
             trabalhado = estado["inicio_pausa"] - horario_inicio - estado["total_pausa"]
@@ -1190,7 +1216,10 @@ class finalizarPonto(View):
             desc += f'\n**⏸️ Pausa:** `{p_in}` *(Em andamento...)*'
             
         novo_embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
-        novo_embed.set_author(name=f'Pica-Ponto de {inter.user}', icon_url=inter.user.display_avatar)
+        if target_avatar:
+            novo_embed.set_author(name=f'Pica-Ponto de {target_name}', icon_url=target_avatar)
+        else:
+            novo_embed.set_author(name=f'Pica-Ponto de {target_name}')
         novo_embed.set_footer(text=f'{config["server_name"]} • 2026')
         
         await inter.message.edit(embed=novo_embed, view=self)
@@ -1288,15 +1317,19 @@ class BotoesSemana(View):
 
                 registros = await db.get_all_user_registries(user_id)
                 por_dia = {}
+                nao_contabilizados = []
                 for reg in registros:
                     data_str = datetime.datetime.fromtimestamp(reg[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
                     por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
+                    if reg[3] == 0 and reg[2] and reg[2] > 10000:
+                        nao_contabilizados.append((data_str, reg[2]))
 
                 embed_user = discord.Embed(
                     description=f'<@{user_id}>\n\u23f1\ufe0f **Total Semanal: `{sign_total}{str(horas_total).zfill(2)}h {str(minutos_total).zfill(2)}m`**',
                     color=discord.Colour.blurple()
                 )
                 for dia, seg_dia in sorted(por_dia.items()):
+                    if seg_dia == 0: continue
                     sign_dia = "-" if seg_dia < 0 else ""
                     abs_seg = abs(seg_dia)
                     h_dia = int(abs_seg // 3600)
@@ -1306,6 +1339,15 @@ class BotoesSemana(View):
                         value=f'`{sign_dia}{str(h_dia).zfill(2)}h {str(m_dia).zfill(2)}m`',
                         inline=True
                     )
+                    
+                for nc in nao_contabilizados:
+                    data_str, staff_id = nc
+                    embed_user.add_field(
+                        name=f'\U0001f4c5 {data_str} (Não Contabilizado)',
+                        value=f'`00h 00m` • Fechado por <@{staff_id}>',
+                        inline=False
+                    )
+                    
                 await inter.channel.send(embed=embed_user)
         else:
             await inter.channel.send('\u26a0\ufe0f Nenhum funcionário com cargo de ponto e horas registadas esta semana.')
