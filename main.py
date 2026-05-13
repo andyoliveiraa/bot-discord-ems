@@ -105,6 +105,13 @@ async def on_ready():
 
     if not hasattr(client, 'status_task'):
         client.status_task = client.loop.create_task(att_status())
+        
+    if not hasattr(client, 'web_server_task'):
+        from dashboard import app as web_app
+        web_app.config['BOT_CLIENT'] = client
+        port = int(os.environ.get("PORT", 8080))
+        client.web_server_task = client.loop.create_task(web_app.run_task(host='0.0.0.0', port=port))
+        print(f"Servidor Web (Dashboard) rodando na porta {port}")
 
 @client.event
 async def on_application_command(ctx: discord.ApplicationContext):

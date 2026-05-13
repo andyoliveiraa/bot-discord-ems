@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-layout">
+    <nav class="sidebar">
+        <div class="logo-container-small">
+            <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+            <h3>EMS Atlas</h3>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
+            <li><a href="/admin" class="active"><i class="fas fa-user-shield"></i> Painel Staff</a></li>
+            <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+        </ul>
+    </nav>
+    
+    <main class="main-content">
+        <header class="dashboard-header">
+            <div>
+                <h2>Painel <span class="highlight">Administrativo</span></h2>
+                <p class="subtitle">Gestão de Funcionários e Pontos</p>
+            </div>
+        </header>
+
+        <section class="admin-actions">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> A versão atual do Dashboard exibe dados em tempo real. As funções de gerenciar pontos (Adicionar/Remover Horas) e Resetar Banco de Dados devem continuar a ser feitas via Comandos no Discord para garantir o log no canal correto. Esta interface será expandida em futuras atualizações para permitir ações diretas.
+            </div>
+            
+            <div class="card">
+                <h3>Comandos Rápidos no Discord</h3>
+                <ul class="command-list">
+                    <li><code>/addtempo @user &lt;horas&gt; &lt;minutos&gt; &lt;motivo&gt;</code> - Adiciona horas.</li>
+                    <li><code>/deltempo @user &lt;horas&gt; &lt;minutos&gt; &lt;motivo&gt;</code> - Remove horas.</li>
+                    <li><code>/resetar_todos</code> - Zera o banco de dados semanal de todos.</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

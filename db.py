@@ -16,13 +16,29 @@ class Database:
                         nome TEXT
                     )
                 ''')
+                
+                try:
+                    await cursor.execute('ALTER TABLE funcionarios ADD COLUMN password_hash TEXT')
+                except:
+                    pass
+                try:
+                    await cursor.execute('ALTER TABLE funcionarios ADD COLUMN reset_token TEXT')
+                except:
+                    pass
+
             await conn.commit()
 
     async def add_funcionario(self, user_id: int, patente_id: str, callsign: str, nome: str):
         async with aiosqlite.connect(self.connector) as conn:
             async with conn.cursor() as cursor:
-                await cursor.execute('INSERT OR REPLACE INTO funcionarios (user_id, patente_id, callsign, nome) VALUES (?, ?, ?, ?)',
-                                     (user_id, patente_id, callsign, nome))
+                await cursor.execute('''
+                    INSERT INTO funcionarios (user_id, patente_id, callsign, nome) 
+                    VALUES (?, ?, ?, ?) 
+                    ON CONFLICT(user_id) DO UPDATE SET 
+                        patente_id=excluded.patente_id, 
+                        callsign=excluded.callsign, 
+                        nome=excluded.nome
+                ''', (user_id, patente_id, callsign, nome))
             await conn.commit()
 
     async def remove_funcionario(self, user_id: int):
@@ -34,7 +50,31 @@ class Database:
     async def get_funcionario(self, user_id: int):
         async with aiosqlite.connect(self.connector) as conn:
             async with conn.cursor() as cursor:
-                await cursor.execute('SELECT patente_id, callsign, nome FROM funcionarios WHERE user_id = ?', (user_id,))
+                await cursor.execute('SELECT patente_id, callsign, nome, password_hash, reset_token FROM funcionarios WHERE user_id = ?', (user_id,))
+                return await cursor.fetchone()
+
+    async def get_funcionario_by_callsign(self, callsign: str):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT user_id, patente_id, callsign, nome, password_hash FROM funcionarios WHERE callsign = ?', (callsign,))
+                return await cursor.fetchone()
+
+    async def update_password(self, user_id: int, password_hash: str):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('UPDATE funcionarios SET password_hash = ? WHERE user_id = ?', (password_hash, user_id))
+            await conn.commit()
+
+    async def set_reset_token(self, user_id: int, token: str):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('UPDATE funcionarios SET reset_token = ? WHERE user_id = ?', (token, user_id))
+            await conn.commit()
+
+    async def get_funcionario_by_reset_token(self, token: str):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT user_id, patente_id, callsign, nome FROM funcionarios WHERE reset_token = ?', (token,))
                 return await cursor.fetchone()
 
     async def get_all_funcionarios(self):

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="login-card">
+    <div class="logo-container">
+        <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo">
+    </div>
+    <h2>Autenticação EMS</h2>
+    <p class="subtitle">Acesse o seu painel do Los Santos Medical Center Atlas</p>
+    
+    <form method="POST" action="/login" class="login-form">
+        <div class="input-group">
+            <label for="callsign">Username (Callsign)</label>
+            <input type="text" id="callsign" name="callsign" placeholder="Ex: W-01" required>
+        </div>
+        
+        <div class="input-group">
+            <label for="password">Palavra-Passe</label>
+            <input type="password" id="password" name="password" placeholder="Sua senha secreta" required>
+        </div>
+        
+        <button type="submit" class="btn-primary">Entrar no Painel</button>
+    </form>
+</div>
+{% endblock %}

@@ -6,6 +6,9 @@ from discord.ui import View, InputText, Modal
 from pytz import timezone
 import json
 import re
+import secrets
+import string
+from werkzeug.security import generate_password_hash
 from db import Database, get_configs
 
 db = Database('db.sqlite3')
@@ -482,8 +485,29 @@ class PicaPonto(commands.Cog):
             
         await db.add_funcionario(usuario.id, patente, callsign, nome)
         
+        # Gerar credenciais para a Dashboard
+        alphabet = string.ascii_letters + string.digits
+        senha_temp = ''.join(secrets.choice(alphabet) for i in range(8))
+        senha_hash = generate_password_hash(senha_temp)
+        await db.update_password(usuario.id, senha_hash)
+        
+        reset_token = secrets.token_urlsafe(32)
+        await db.set_reset_token(usuario.id, reset_token)
+        
         try:
-            await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você foi contratado(a) e registrado(a) no sistema!\n**→ Staff:** {ctx.author.mention}\n**→ Patente:** {patente_info["nome"]}\n**→ Callsign:** `{callsign}`\n**→ Motivo:** {motivo}')
+            msg_dm = (
+                f'**<:aviso:1269036173381206132> AVISO!** Você foi contratado(a) e registrado(a) no sistema!\n'
+                f'**→ Staff:** {ctx.author.mention}\n**→ Patente:** {patente_info["nome"]}\n'
+                f'**→ Callsign:** `{callsign}`\n**→ Motivo:** {motivo}\n\n'
+                f'**🌐 Dashboard Online:**\n'
+                f'O seu acesso ao painel já está disponível!\n'
+                f'**Painel:** `https://ems.discloud.app`\n'
+                f'**Username:** `{callsign}`\n'
+                f'**Senha Provisória:** `{senha_temp}`\n'
+                f'*(Recomendamos que você altere sua senha no primeiro acesso através de "Esqueci a Palavra-Passe" ou do link abaixo:)*\n'
+                f'`https://ems.discloud.app/reset_password/{reset_token}`'
+            )
+            await usuario.send(msg_dm)
         except (discord.HTTPException, discord.Forbidden):
             pass
             
