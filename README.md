@@ -8,7 +8,7 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
 
 ### 🚀 Gestão de Ponto (Discord & Web)
 - **Painel Interativo:** Registo de entrada/saída via comando `/ponto` com botões de Pausa/Retoma.
-- **Auto-Recuperação:** Recupera pontos ativos após crashes ou reinícios do bot.
+- **Persistência Total:** Pontos ativos são salvos em disco e restaurados automaticamente após reinícios ou crashes, permitindo que o funcionário finalize o ponto normalmente sem perder horas.
 - **Encerramento Automático:** Fecha pontos abertos por mais de 24h para evitar abusos.
 - **Edição via Dashboard:** Administradores podem adicionar/remover tempo ou cancelar pontos diretamente pelo site.
 
@@ -56,13 +56,17 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
 
 ## 📝 Comandos Staff (Discord)
 
-- `/contratar @user [patente] [motivo]`
-- `/promover @user [patente] [motivo]`
-- `/despedir @user [motivo]`
-- `/resetarsemana` — Gera PDF, faz backup e arquiva a semana.
+- `/contratar @user [patente] [nome] [motivo]` — Registra um novo funcionário e gera senha web.
+- `/promover @user [nova_patente] [motivo]` — Altera a patente e o callsign.
+- `/despedir @user [motivo]` — Remove o funcionário e retira os cargos.
+- `/addtempo @user [horas] [minutos] [motivo]` — Adiciona tempo manual a um funcionário.
+- `/deltempo @user [horas] [minutos] [motivo]` — Remove tempo manual de um funcionário.
+- `/pontosreg @user` — Consulta o histórico detalhado de registros de um usuário.
+- `/resetarsemana` — Gera PDF, faz backup e arquiva a semana (cria pagamentos).
 - `/semana` — Apenas visualiza o relatório atual sem encerrar.
 - `/ranking` — Top 10 de horas da semana.
-- `/autocorrecao` — Sincroniza callsigns e nomes de todos os membros.
+- `/autocorrecao` — Sincroniza callsigns e nomes de todos os membros conforme as regras de patente.
+- `/resetarsenha @user` — Gera um novo link de redefinição de senha para o Dashboard.
 
 ---
 
