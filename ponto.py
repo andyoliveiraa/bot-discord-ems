@@ -1,4 +1,5 @@
 import datetime
+import asyncio
 import discord
 from discord.commands import Option
 from discord.ext import commands, tasks
@@ -105,7 +106,7 @@ async def gerar_pdf_semanal(top_todos, guild):
     pdf.cell(200, 10, txt=f"Total a Pagar: {formatar_moeda_pdf(total_pagamento_geral)}", ln=1, align='L')
     
     file_path = "relatorio_semanal.pdf"
-    pdf.output(file_path)
+    await asyncio.to_thread(pdf.output, file_path)
     return file_path
 
 def save_active_pontos():
@@ -488,7 +489,8 @@ class PicaPonto(commands.Cog):
         # Gerar credenciais para a Dashboard
         alphabet = string.ascii_letters + string.digits
         senha_temp = ''.join(secrets.choice(alphabet) for i in range(8))
-        senha_hash = generate_password_hash(senha_temp)
+        # Executar em thread para não bloquear o event loop do bot
+        senha_hash = await asyncio.to_thread(generate_password_hash, senha_temp)
         await db.update_password(usuario.id, senha_hash)
         
         reset_token = secrets.token_urlsafe(32)

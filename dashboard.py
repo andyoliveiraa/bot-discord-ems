@@ -1,6 +1,7 @@
 from quart import Quart, render_template, request, session, redirect, url_for, flash
 import os
 import asyncio
+import secrets
 from werkzeug.security import check_password_hash, generate_password_hash
 from db import Database, get_configs
 
@@ -37,7 +38,13 @@ async def index():
 
     is_admin = session.get('is_admin', False)
 
-    return await render_template('index.html', func=func, horas=horas, minutos=minutos, ranking=ranking_formatado, is_admin=is_admin)
+    # Obter nome legível da patente (func[0] é a chave interna, ex: "agente")
+    patente_nome = func[0]  # fallback à chave caso não encontre
+    patente_info = config.get("cargos_patentes", {}).get(func[0])
+    if patente_info:
+        patente_nome = patente_info.get("nome", func[0])
+
+    return await render_template('index.html', func=func, horas=horas, minutos=minutos, ranking=ranking_formatado, is_admin=is_admin, patente_nome=patente_nome)
 
 @app.route('/login', methods=['GET', 'POST'])
 async def login():
@@ -89,8 +96,7 @@ async def reset_password(token):
         senha_hash = await asyncio.to_thread(generate_password_hash, new_password)
         await db.update_password(func[0], senha_hash)
         
-        # Invalida o token
-        import secrets
+        # Invalida o token com um novo token aleatório
         await db.set_reset_token(func[0], secrets.token_urlsafe(32))
         
         await flash("Senha alterada com sucesso! Você já pode fazer login.", "success")

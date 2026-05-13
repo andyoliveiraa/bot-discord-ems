@@ -20,10 +20,10 @@
         <header class="dashboard-header">
             <div>
                 <h2>Bem-vindo(a), <span class="highlight">{{ func[2] }}</span></h2>
-                <p class="subtitle">Patente: {{ func[1] }}</p>
+                <p class="subtitle">Patente: {{ patente_nome }}</p>
             </div>
             <div class="user-profile">
-                <div class="avatar-placeholder">{{ func[2][0] }}</div>
+                <div class="avatar-placeholder">{{ func[2][0] if func[2] else '?' }}</div>
             </div>
         </header>
 
