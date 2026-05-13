@@ -190,8 +190,7 @@ class embed_modal(Modal):
         super().__init__(title='Gerador de Embed', timeout=720)
         self.add_item(InputText(label='Título da Embed', style=discord.InputTextStyle.short, required=True, max_length=250))
         self.add_item(InputText(label='Descrição da Embed', style=discord.InputTextStyle.long, required=True, max_length=4000))
-        self.add_item(InputText(label='Imagem (thumbnail)', placeholder='Links suportados: https:// e http://', style=discord.InputTextStyle.short, required=False))
-        self.add_item(InputText(label='Imagem grande', placeholder='Links suportados: https:// e http://', style=discord.InputTextStyle.short, required=False))
+        self.add_item(InputText(label='Imagem (Thumbnail)', placeholder='Links suportados: https:// e http://', style=discord.InputTextStyle.short, required=False))
         self.add_item(InputText(label='Cor da Embed', style=discord.InputTextStyle.short, required=True))
 
     async def callback(self, inter: discord.Interaction):
@@ -203,8 +202,6 @@ class embed_modal(Modal):
 
         if self.children[2].value.startswith('http:') or self.children[2].value.startswith('https:'):
             embed.set_thumbnail(url=self.children[2].value)
-        if self.children[3].value.startswith('http:') or self.children[3].value.startswith('https:'):
-            embed.set_image(url=self.children[3].value)
 
         embed.color = color()
         embed.set_footer(text=f'{config["server_name"]} • 2026', icon_url=client.user.display_avatar)
