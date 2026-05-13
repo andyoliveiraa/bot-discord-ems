@@ -684,6 +684,42 @@ class PicaPonto(commands.Cog):
         embed_log.set_author(name='LOG: Reset de Horas', icon_url=self.client.user.display_avatar)
         await canal_log.send(embed=embed_log)
 
+    @commands.slash_command(name="resetarsenha", description='[ADM] Reseta a senha do painel web de um funcionário', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def resetarsenha(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True)):
+        await ctx.defer(ephemeral=True)
+
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.followup.send('❌ Este usuário não é um funcionário registrado no sistema.', ephemeral=True)
+
+        reset_token = secrets.token_urlsafe(32)
+        await db.set_reset_token(usuario.id, reset_token)
+
+        try:
+            msg_dm = (
+                f'**<:aviso:1269036173381206132> AVISO!** A sua senha do painel web foi resetada pela Staff!\n'
+                f'**→ Staff:** {ctx.author.mention}\n\n'
+                f'**🌐 Dashboard Online:**\n'
+                f'Para definir uma nova senha, acesse o link abaixo:\n'
+                f'`https://ems.discloud.app/reset_password/{reset_token}`'
+            )
+            await usuario.send(msg_dm)
+            await ctx.followup.send(f'<a:check:1269034091882221710> Sucesso! O link de redefinição de senha foi enviado na DM de {usuario.mention}.', ephemeral=True)
+        except (discord.HTTPException, discord.Forbidden):
+            await ctx.followup.send(f'⚠️ Não foi possível enviar a DM para {usuario.mention}. O link de reset é: `https://ems.discloud.app/reset_password/{reset_token}`', ephemeral=True)
+
+        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        if canal_log:
+            embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
+                f'**→ O(A) funcionário(a) acima teve a sua senha do painel web resetada pela Staff.**', colour=discord.Colour.orange())
+            embed_log.set_author(name='LOG: Reset de Senha Web', icon_url=self.client.user.display_avatar)
+            try:
+                await canal_log.send(embed=embed_log)
+            except:
+                pass
+
+
     @commands.slash_command(description='[ADM] Configura para 0 horas e apaga os dados de todos os usuários registrados.', contexts={discord.InteractionContextType.guild})
     @commands.has_any_role(config['staff_role_id'])
     async def resetar_todos(self, ctx: discord.ApplicationContext):
