@@ -231,12 +231,10 @@ async def meus_pontos():
 
     patente_info = config.get('cargos_patentes', {}).get(func[0] if func else '', {})
     valor_hora = patente_info.get('valor_hora', 0) if patente_info else 0
-    avatar_url = await get_user_avatar(target_id)
 
     return await render_template('meus_pontos.html',
         func=func, target_func=target_func, target_id=target_id,
-        dias=dias_formatados, is_admin=is_admin, valor_hora=valor_hora,
-        avatar_url=avatar_url)
+        dias=dias_formatados, is_admin=is_admin, valor_hora=valor_hora)
 
 # ── API: editar ponto ─────────────────────────────────────────────────────────
 
