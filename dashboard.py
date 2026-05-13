@@ -1,6 +1,7 @@
 from quart import Quart, render_template, request, session, redirect, url_for, flash, jsonify
 import os
 import asyncio
+import aiohttp
 import secrets
 from werkzeug.security import check_password_hash, generate_password_hash
 from db import Database, get_configs, save_configs
@@ -20,48 +21,53 @@ async def api_track_visit():
     if session.get('visitor_notified'):
         return jsonify({'ok': True})
 
-    # Detecção de IP via Headers (Útil para Discloud/Proxies)
+    # Detecção de IP Real (Discloud usa Proxies)
+    # X-Forwarded-For costuma ter uma lista: "client, proxy1, proxy2"
     ip_headers = request.headers.get('X-Forwarded-For', request.remote_addr)
     if ip_headers and ',' in ip_headers:
-        ip_headers = ip_headers.split(',')[0].strip()
+        final_ip = ip_headers.split(',')[0].strip()
+    else:
+        final_ip = ip_headers
 
-    try:
-        data = await request.get_json()
-    except Exception:
-        data = {}
-        
-    ip_client = data.get('ip')
-    # Prioriza o IP do cliente se existir, senão usa o dos headers
-    final_ip = ip_client if ip_client and ip_client != 'Desconhecido' else ip_headers
-    
     user_agent = request.headers.get('User-Agent', 'Desconhecido')
-    
     device = "Desktop / Computador"
     if any(m in user_agent.lower() for m in ['mobile', 'android', 'iphone', 'ipad']):
         device = "Telemóvel / Tablet"
 
+    # Lookup de Localização
+    location_data = {}
+    try:
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.get(f"http://ip-api.com/json/{final_ip}?fields=status,message,country,city,isp,org,as,query") as resp:
+                if resp.status == 200:
+                    location_data = await resp.json()
+    except Exception as e:
+        print(f"[DEBUG] Erro ao consultar localização: {e}")
+
     bot = app.config.get('BOT_CLIENT')
     owner_id = config.get('owner_id')
     
-    print(f"[TRACK] Tentativa de notificação. IP: {final_ip}, OwnerID: {owner_id}, Bot: {'OK' if bot else 'Erro'}")
-
     if bot and owner_id:
         try:
             owner = bot.get_user(int(owner_id)) or await bot.fetch_user(int(owner_id))
             if owner:
+                city = location_data.get('city', 'Desconhecida')
+                country = location_data.get('country', 'Desconhecido')
+                isp = location_data.get('isp', 'Desconhecido')
+                
                 msg = (
                     "🌐 **Novo acesso ao Dashboard!**\n"
                     f"📍 **IP:** `{final_ip}`\n"
+                    f"🗺️ **Localização:** `{city}, {country}`\n"
+                    f"📡 **ISP:** `{isp}`\n"
                     f"💻 **Dispositivo:** `{device}`\n"
-                    f"📝 **User-Agent:** `{user_agent[:100]}...`"
+                    f"📝 **User-Agent:** `{user_agent[:80]}...`"
                 )
                 await owner.send(msg)
                 session['visitor_notified'] = True
-                print(f"[TRACK] Notificação enviada para {owner_id}")
-            else:
-                print(f"[TRACK] Owner {owner_id} não encontrado")
+                print(f"[TRACK] Notificação com localização enviada para {owner_id}")
         except Exception as e:
-            print(f"[DEBUG] Erro ao enviar notificação de visita: {e}")
+            print(f"[DEBUG] Erro ao enviar notificação: {e}")
     
     return jsonify({'ok': True})
 

@@ -23,34 +23,16 @@
         {% block content %}{% endblock %}
     </div>
     <script>
-        // Sistema de Notificação de Acesso
+        // Sistema de Notificação de Acesso (IP & Localização via Server-side)
         (function() {
             if (!sessionStorage.getItem('notified')) {
-                // Tentamos obter o IP do cliente via meuip.com (API oficial)
-                fetch('https://meuip.com/api/meuip.php')
-                    .then(res => res.text())
-                    .then(ip => {
-                        // Se o retorno parecer HTML ou vazio, enviamos como Desconhecido para o servidor tratar
-                        const cleanIp = ip.trim();
-                        const isHtml = cleanIp.startsWith('<') || cleanIp.startsWith('<!');
-                        const finalIp = (cleanIp && !isHtml) ? cleanIp : 'Desconhecido';
-                        
-                        fetch('/api/track-visit', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ip: finalIp })
-                        });
-                        sessionStorage.setItem('notified', 'true');
-                    })
-                    .catch(err => {
-                        // Se houver erro de CORS ou rede, o servidor detectará o IP pelos headers
-                        fetch('/api/track-visit', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ip: 'Desconhecido' })
-                        });
-                        sessionStorage.setItem('notified', 'true');
-                    });
+                fetch('/api/track-visit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                }).then(() => {
+                    sessionStorage.setItem('notified', 'true');
+                }).catch(err => console.error('Erro no tracking:', err));
             }
         })();
     </script>
