@@ -1,5 +1,6 @@
 from quart import Quart, render_template, request, session, redirect, url_for, flash
 import os
+import asyncio
 from werkzeug.security import check_password_hash, generate_password_hash
 from db import Database, get_configs
 
@@ -47,7 +48,7 @@ async def login():
         
         func = await db.get_funcionario_by_callsign(callsign)
         if func and func[4]: # func[4] is password_hash
-            if check_password_hash(func[4], password):
+            if await asyncio.to_thread(check_password_hash, func[4], password):
                 session['user_id'] = func[0]
                 
                 # Verifica se o usuário é administrador (tem o cargo de staff)
@@ -84,7 +85,8 @@ async def reset_password(token):
     if request.method == 'POST':
         form = await request.form
         new_password = form.get('password')
-        senha_hash = generate_password_hash(new_password)
+        # Executar em thread para não bloquear o event loop
+        senha_hash = await asyncio.to_thread(generate_password_hash, new_password)
         await db.update_password(func[0], senha_hash)
         
         # Invalida o token
