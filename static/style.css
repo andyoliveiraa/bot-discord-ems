@@ -72,11 +72,11 @@ body {
 }
 
 .logo-container .logo {
-    width: 6rem;
-    height: 6rem;
+    width: 4.5rem;
+    height: 4.5rem;
     border-radius: 50%;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+    margin-bottom: 1.25rem;
+    box-shadow: 0 0 25px rgba(59, 130, 246, 0.3);
     border: 2px solid var(--glass-border);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     object-fit: cover;
@@ -213,11 +213,11 @@ body {
 }
 
 .sidebar {
-    width: 280px;
+    width: 260px;
     background: rgba(10, 13, 20, 0.4);
     backdrop-filter: blur(20px);
     border-right: 1px solid var(--glass-border);
-    padding: 40px 24px;
+    padding: 30px 20px;
     display: flex;
     flex-direction: column;
     box-shadow: 10px 0 30px rgba(0, 0, 0, 0.2);
@@ -226,23 +226,23 @@ body {
 .logo-container-small {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 48px;
-    padding-bottom: 24px;
+    gap: 12px;
+    margin-bottom: 32px;
+    padding-bottom: 16px;
     border-bottom: 1px solid var(--glass-border);
 }
 
 .logo-small {
-    width: 3rem;
-    height: 3rem;
+    width: 2.2rem;
+    height: 2.2rem;
     border-radius: 50%;
     box-shadow: var(--accent-glow);
-    border: 2px solid rgba(255, 255, 255, 0.1);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
     object-fit: cover;
 }
 
 .logo-container-small h3 {
-    font-size: 20px;
+    font-size: 1.1rem;
     font-weight: 800;
     letter-spacing: 0.5px;
 }
@@ -309,7 +309,7 @@ body {
 
 .main-content {
     flex: 1;
-    padding: 48px;
+    padding: 32px;
     overflow-y: auto;
     background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 50%);
 }
@@ -318,13 +318,13 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 48px;
+    margin-bottom: 32px;
 }
 
 .dashboard-header h2 {
-    font-size: 36px;
+    font-size: 1.75rem;
     font-weight: 800;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .highlight {
@@ -345,14 +345,14 @@ body {
 }
 
 .user-profile .avatar-placeholder {
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 2.8rem;
+    height: 2.8rem;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent-blue), #1e40af);
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     font-weight: 800;
     box-shadow: var(--accent-glow);
     border: 2px solid rgba(255, 255, 255, 0.1);
@@ -364,8 +364,8 @@ body {
 }
 
 .user-profile .avatar-img {
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 2.8rem;
+    height: 2.8rem;
     border-radius: 50%;
     object-fit: cover;
     box-shadow: var(--accent-glow);
@@ -393,22 +393,22 @@ body {
 }
 
 .avatar-table {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 1.8rem;
+    height: 1.8rem;
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid var(--glass-border);
 }
 
 .avatar-table-placeholder {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 1.8rem;
+    height: 1.8rem;
     border-radius: 50%;
     background: var(--accent-blue);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 0.85rem;
     font-weight: 700;
 }
 
@@ -508,8 +508,23 @@ body {
     backdrop-filter: blur(12px);
     border: 1px solid var(--glass-border);
     border-radius: 24px;
-    overflow: hidden;
+    overflow-x: auto;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-blue) transparent;
+}
+
+.table-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: var(--accent-blue);
+    border-radius: 10px;
 }
 
 .modern-table {
@@ -633,7 +648,6 @@ code {
     }
     .table-container {
         border-radius: 16px;
-        overflow-x: auto;
     }
     .modern-table th, .modern-table td {
         padding: 16px;
