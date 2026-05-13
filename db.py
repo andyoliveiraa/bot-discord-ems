@@ -16,7 +16,24 @@ class Database:
                         nome TEXT
                     )
                 ''')
-                
+                await cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS tempo_semanal (
+                        user_id INTEGER PRIMARY KEY,
+                        tempo_total INTEGER DEFAULT 0
+                    )
+                ''')
+                await cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS pontos (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        started INTEGER,
+                        finished INTEGER,
+                        staff_finished INTEGER DEFAULT 0,
+                        duration INTEGER DEFAULT 0,
+                        pauses TEXT DEFAULT "[]"
+                    )
+                ''')
+
                 try:
                     await cursor.execute('ALTER TABLE funcionarios ADD COLUMN password_hash TEXT')
                 except:

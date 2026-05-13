@@ -10,6 +10,11 @@ config = get_configs()
 app.secret_key = config.get('secret_key', 'chave_secreta_padrao_muito_segura_123!')
 db = Database('db.sqlite3')
 
+@app.before_serving
+async def startup():
+    """Garante que todas as tabelas existem antes de servir qualquer pedido."""
+    await db.setup_db()
+
 @app.route('/')
 async def index():
     if 'user_id' not in session:
