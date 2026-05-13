@@ -687,6 +687,81 @@ code {
 .btn-icon-danger { background:rgba(239,68,68,.15); color:#ef4444; border-color:rgba(239,68,68,.25); }
 .btn-icon-danger:hover { background:rgba(239,68,68,.3); }
 
+/* ── ACTIONS DROPDOWN MENU ───────────────────────────────────── */
+.actions-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: rgba(15, 22, 36, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    min-width: 200px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    z-index: 1000;
+    padding: 8px;
+    margin-top: 8px;
+    animation: fadeInScale 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.actions-dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content a {
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.dropdown-content a i {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.dropdown-content a:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    transform: translateX(4px);
+}
+
+.dropdown-content a.text-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ff4d4d;
+}
+
+.dropdown-content a.text-success:hover {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+}
+
+.dropdown-content a.text-warning:hover {
+    background: rgba(245, 158, 11, 0.1);
+    color: #fbbf24;
+}
+
 /* ── EXTRA BUTTONS ──────────────────────────────────────────── */
 .btn-secondary {
     background: rgba(255,255,255,.07); color: var(--text-primary);
