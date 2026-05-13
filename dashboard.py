@@ -59,12 +59,12 @@ def login_required(fn):
         return await fn(*a, **kw)
     return wrapper
 
-def admin_required(fn):
+def direcao_required(fn):
     import functools
     @functools.wraps(fn)
     async def wrapper(*a, **kw):
-        if not session.get('is_admin'):
-            return jsonify({'erro': 'Sem permissão'}), 403
+        if not session.get('is_direcao'):
+            return jsonify({'erro': 'Acesso restrito à Direção'}), 403
         return await fn(*a, **kw)
     return wrapper
 
@@ -139,6 +139,21 @@ async def login():
                             is_admin = True
                             break
                 session['is_admin'] = is_admin
+                
+                # Check for Direção (Owner or specific roles)
+                is_direcao = (func[0] == config.get('owner_id'))
+                direcao_roles = [
+                    config['cargos_patentes']['sub_diretor']['id'],
+                    config['cargos_patentes']['diretor_adjunto']['id'],
+                    config['cargos_patentes']['diretor']['id']
+                ]
+                if not is_direcao and bot:
+                    for guild in bot.guilds:
+                        member = guild.get_member(func[0])
+                        if member and any(r.id in direcao_roles for r in member.roles):
+                            is_direcao = True
+                            break
+                session['is_direcao'] = is_direcao
                 return redirect(url_for('index'))
             else:
                 await flash('Senha incorreta.', 'danger')
@@ -176,12 +191,13 @@ async def meus_pontos():
     user_id = session['user_id']
     func = await db.get_funcionario(user_id)
     is_admin = session.get('is_admin', False)
+    is_direcao = session.get('is_direcao', False)
 
     # Staff pode ver pontos de outro utilizador via ?uid=
     target_id = user_id
     target_func = func
     func_list = []
-    if is_admin:
+    if is_admin or is_direcao:
         func_list = await db.get_all_funcionarios()
         func_list.sort(key=lambda x: x[3].lower()) # Sort by name
         uid_param = request.args.get('uid')
@@ -237,15 +253,15 @@ async def meus_pontos():
 
     return await render_template('meus_pontos.html',
         func=func, target_func=target_func, target_id=target_id,
-        dias=dias_formatados, is_admin=is_admin, valor_hora=valor_hora,
-        func_list=func_list)
+        dias=dias_formatados, is_admin=is_admin, is_direcao=is_direcao,
+        valor_hora=valor_hora, func_list=func_list)
 
 # ── API: editar ponto ─────────────────────────────────────────────────────────
 
 @app.route('/api/ponto/<int:ponto_id>/editar', methods=['POST'])
 async def api_editar_ponto(ponto_id):
-    if not session.get('is_admin'):
-        return jsonify({'erro': 'Sem permissão'}), 403
+    if not session.get('is_direcao'):
+        return jsonify({'erro': 'Ação permitida apenas para a Direção'}), 403
 
     ponto = await db.get_ponto_by_id(ponto_id)
     if not ponto or ponto[7] is not None:
@@ -280,6 +296,42 @@ async def api_editar_ponto(ponto_id):
         await db.del_time(user_id, duration_actual)
         await db.cancel_ponto(ponto_id, staff_id)
         return jsonify({'ok': True})
+
+    elif action == 'edit_times':
+        try:
+            # Recebe strings no formato HH:MM
+            str_in = form.get('hr_in')
+            str_out = form.get('hr_out')
+            
+            # Precisamos manter a data original do ponto
+            base_date = datetime.datetime.fromtimestamp(ponto[2]).date()
+            
+            t_in = datetime.datetime.strptime(str_in, '%H:%M').time()
+            t_out = datetime.datetime.strptime(str_out, '%H:%M').time()
+            
+            # Criar novos timestamps
+            new_in = int(datetime.datetime.combine(base_date, t_in).timestamp())
+            new_out = int(datetime.datetime.combine(base_date, t_out).timestamp())
+            
+            # Se a saída for antes da entrada, assume que virou o dia (adiciona 24h)
+            if new_out < new_in:
+                new_out += 86400
+                
+            new_duration = new_out - new_in
+            
+            # Diferença para atualizar o total do usuário
+            diff = new_duration - duration_actual
+            
+            async with db.pool.connect() as conn: # Usando pool se disponível ou connector direto
+                await db.update_ponto_times(ponto_id, new_in, new_out, new_duration)
+                if diff > 0:
+                    await db.add_time(user_id, diff)
+                elif diff < 0:
+                    await db.del_time(user_id, abs(diff))
+                    
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'erro': f'Erro ao processar horários: {str(e)}'}), 400
 
     return jsonify({'erro': 'Acção inválida'}), 400
 
@@ -335,9 +387,73 @@ async def admin_definicoes():
             'total_pago': total_pago, 'total': total,
         })
 
-    return await render_template('admin_definicoes.html',
-        func_list=func_list, semanas=semanas_info,
-        cargos=cargos, is_admin=True)
+    return await render_template('admin_definicoes.html', 
+        func_list=func_list, 
+        semanas=semanas_info, 
+        cargos=cargos,
+        ordenado_cargos=sorted(cargos.items(), key=lambda x: x[1].get('valor_hora', 0), reverse=True))
+
+@app.route('/api/admin/funcionario/<int:uid>/action', methods=['POST'])
+@direcao_required
+async def api_admin_func_action(uid):
+    
+    form = await request.form
+    action = form.get('action') # promote, demote, fire
+    
+    bot = app.config.get('BOT_CLIENT')
+    guild = None
+    member = None
+    if bot:
+        guild = bot.get_guild(config['guild_id'])
+        if guild:
+            member = guild.get_member(uid)
+            if not member:
+                try: member = await guild.fetch_member(uid)
+                except: pass
+
+    if action == 'fire':
+        await db.remove_funcionario(uid)
+        if member:
+            # Tenta remover todos os cargos de patente
+            for p_info in config['cargos_patentes'].values():
+                role = guild.get_role(p_info['id'])
+                if role and role in member.roles:
+                    try: await member.remove_roles(role)
+                    except: pass
+        return jsonify({'ok': True})
+
+    elif action in ['promote', 'demote']:
+        new_patente = form.get('patente_id')
+        if not new_patente or new_patente not in config['cargos_patentes']:
+            return jsonify({'erro': 'Patente inválida'}), 400
+        
+        # Obter dados do funcionário atual
+        func = await db.get_funcionario(uid)
+        if not func: return jsonify({'erro': 'Funcionário não encontrado'}), 404
+        
+        # Atualizar no DB
+        # Note: add_funcionario uses ON CONFLICT UPDATE, so it works for updates too
+        await db.add_funcionario(uid, new_patente, func[1], func[2])
+        
+        if member:
+            # Trocar cargos no Discord
+            old_role_id = config['cargos_patentes'].get(func[0], {}).get('id')
+            new_role_id = config['cargos_patentes'][new_patente]['id']
+            
+            old_role = guild.get_role(old_role_id) if old_role_id else None
+            new_role = guild.get_role(new_role_id)
+            
+            if old_role and old_role in member.roles:
+                try: await member.remove_roles(old_role)
+                except: pass
+            
+            if new_role:
+                try: await member.add_roles(new_role)
+                except: pass
+                
+        return jsonify({'ok': True})
+
+    return jsonify({'erro': 'Acção desconhecida'}), 400
 
 # ── API: admin acções ─────────────────────────────────────────────────────────
 

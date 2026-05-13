@@ -285,6 +285,15 @@ class Database:
                 await cursor.execute('UPDATE pontos SET duration = ? WHERE id = ?', (new_duration, ponto_id))
             await conn.commit()
 
+    async def update_ponto_times(self, ponto_id: int, started: int, finished: int, duration: int):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute(
+                    'UPDATE pontos SET started = ?, finished = ?, duration = ? WHERE id = ?',
+                    (started, finished, duration, ponto_id)
+                )
+            await conn.commit()
+
     async def cancel_ponto(self, ponto_id: int, staff_id: int):
         """Cancela um ponto: duration=0, staff_finished=staff_id (não contabilizado)."""
         async with aiosqlite.connect(self.connector) as conn:

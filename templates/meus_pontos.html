@@ -9,7 +9,7 @@
     <ul class="nav-links">
       <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
       <li><a href="/meus-pontos" class="active"><i class="fas fa-clock"></i> Meus Pontos</a></li>
-      {% if is_admin %}<li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>{% endif %}
+      {% if is_direcao %}<li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>{% endif %}
       <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
     </ul>
   </nav>
@@ -24,7 +24,7 @@
       </div>
     </header>
 
-    {% if is_admin %}
+    {% if is_direcao %}
     <section style="margin-bottom:1.5rem;">
       <form method="GET" action="/meus-pontos" style="display:flex;gap:.75rem;align-items:center;background:var(--card);padding:1rem;border-radius:12px;border:1px solid var(--glass-border);width:fit-content;">
         <label style="font-weight:600;color:var(--text-secondary);font-size:.9rem;">Selecionar Funcionário:</label>
@@ -55,7 +55,7 @@
             <thead>
               <tr>
                 <th>Entrada</th><th>Saída</th><th>Duração</th><th>Estado</th><th>Pausas</th>
-                {% if is_admin %}<th>Ações</th>{% endif %}
+                {% if is_direcao %}<th>Ações</th>{% endif %}
               </tr>
             </thead>
             <tbody>
@@ -72,9 +72,9 @@
                 </td>
                 <td>
                   {% if reg.cancelado %}
-                    <span class="badge badge-danger">Não Contabilizado</span>
+                    <span class="badge badge-danger">Fechado Staff - Não Cont.</span>
                   {% elif reg.staff_finished and reg.staff_finished > 10000 %}
-                    <span class="badge badge-warn">Fechado Staff</span>
+                    <span class="badge badge-ok">Fechado Staff - Contabilizadas</span>
                   {% else %}
                     <span class="badge badge-ok">Contabilizado</span>
                   {% endif %}
@@ -86,15 +86,17 @@
                     {% endfor %}
                   {% else %}—{% endif %}
                 </td>
-                {% if is_admin %}
+                {% if is_direcao %}
                 <td>
                   {% if not reg.cancelado %}
-                  <button class="btn-icon" title="Editar" onclick="abrirModal({{ reg.id }}, {{ reg.duration_seg }})">
-                    <i class="fas fa-edit"></i>
-                  </button>
-                  <button class="btn-icon btn-icon-danger" title="Cancelar" onclick="cancelarPonto({{ reg.id }})">
-                    <i class="fas fa-times"></i>
-                  </button>
+                  <div class="actions-dropdown">
+                    <button class="btn-icon" title="Ações"><i class="fas fa-ellipsis-v"></i></button>
+                    <div class="dropdown-content">
+                      <a href="javascript:void(0)" onclick="abrirModal({{ reg.id }}, '{{ reg.hr_in }}', '{{ reg.hr_out }}')"><i class="fas fa-clock"></i> Ajustar Horários</a>
+                      <a href="javascript:void(0)" onclick="abrirModalOld({{ reg.id }}, {{ reg.duration_seg }})"><i class="fas fa-plus-minus"></i> Add/Rem Horas</a>
+                      <a href="javascript:void(0)" onclick="cancelarPonto({{ reg.id }})" class="text-danger"><i class="fas fa-trash"></i> Cancelar Ponto</a>
+                    </div>
+                  </div>
                   {% endif %}
                 </td>
                 {% endif %}
@@ -113,27 +115,44 @@
   </main>
 </div>
 
-{% if is_admin %}
+{% if is_direcao %}
 <div id="modal-overlay" class="modal-overlay" style="display:none;">
   <div class="modal-box">
-    <h3 style="margin-bottom:1.5rem;"><i class="fas fa-edit highlight"></i> Editar Ponto</h3>
-    <div class="form-group">
-      <label>Acção</label>
-      <select id="modal-action" class="form-input">
-        <option value="add_time">Adicionar horas</option>
-        <option value="remove_time">Remover horas</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;">
-      <div class="form-group" style="flex:1;margin-bottom:0;">
-        <label>Horas</label>
-        <input type="number" id="modal-horas" class="form-input" min="0" value="0">
-      </div>
-      <div class="form-group" style="flex:1;margin-bottom:0;">
-        <label>Minutos</label>
-        <input type="number" id="modal-minutos" class="form-input" min="0" max="59" value="0">
+    <h3 style="margin-bottom:1.5rem;"><i class="fas fa-edit highlight"></i> Ajustar Ponto</h3>
+    
+    <div id="modal-mode-times">
+      <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;">
+        <div class="form-group" style="flex:1;">
+          <label>Hora Entrada</label>
+          <input type="time" id="modal-hr-in" class="form-input">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Hora Saída</label>
+          <input type="time" id="modal-hr-out" class="form-input">
+        </div>
       </div>
     </div>
+
+    <div id="modal-mode-duration" style="display:none;">
+      <div class="form-group">
+        <label>Acção</label>
+        <select id="modal-action" class="form-input">
+          <option value="add_time">Adicionar horas</option>
+          <option value="remove_time">Remover horas</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;">
+        <div class="form-group" style="flex:1;margin-bottom:0;">
+          <label>Horas</label>
+          <input type="number" id="modal-horas" class="form-input" min="0" value="0">
+        </div>
+        <div class="form-group" style="flex:1;margin-bottom:0;">
+          <label>Minutos</label>
+          <input type="number" id="modal-minutos" class="form-input" min="0" max="59" value="0">
+        </div>
+      </div>
+    </div>
+
     <div style="display:flex;gap:.75rem;">
       <button class="btn-primary" style="flex:1;" onclick="confirmarEdicao()">Confirmar</button>
       <button class="btn-secondary" style="flex:1;" onclick="fecharModal()">Cancelar</button>
@@ -143,12 +162,26 @@
 
 <script>
 var pontoAtivo = null;
+var currentMode = 'times';
 
-function abrirModal(id, durSeg) {
+function abrirModal(id, hrIn, hrOut) {
   pontoAtivo = id;
+  currentMode = 'times';
+  document.getElementById('modal-mode-times').style.display = 'block';
+  document.getElementById('modal-mode-duration').style.display = 'none';
+  document.getElementById('modal-hr-in').value = hrIn;
+  document.getElementById('modal-hr-out').value = hrOut;
   document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function abrirModalOld(id, durSeg) {
+  pontoAtivo = id;
+  currentMode = 'duration';
+  document.getElementById('modal-mode-times').style.display = 'none';
+  document.getElementById('modal-mode-duration').style.display = 'block';
   document.getElementById('modal-horas').value = 0;
   document.getElementById('modal-minutos').value = 0;
+  document.getElementById('modal-overlay').style.display = 'flex';
 }
 
 function fecharModal() {
@@ -157,13 +190,17 @@ function fecharModal() {
 }
 
 async function confirmarEdicao() {
-  var action = document.getElementById('modal-action').value;
-  var horas = document.getElementById('modal-horas').value;
-  var minutos = document.getElementById('modal-minutos').value;
   var fd = new FormData();
-  fd.append('action', action);
-  fd.append('horas', horas);
-  fd.append('minutos', minutos);
+  if (currentMode === 'times') {
+    fd.append('action', 'edit_times');
+    fd.append('hr_in', document.getElementById('modal-hr-in').value);
+    fd.append('hr_out', document.getElementById('modal-hr-out').value);
+  } else {
+    fd.append('action', document.getElementById('modal-action').value);
+    fd.append('horas', document.getElementById('modal-horas').value);
+    fd.append('minutos', document.getElementById('modal-minutos').value);
+  }
+  
   var res = await fetch('/api/ponto/' + pontoAtivo + '/editar', {method: 'POST', body: fd});
   var data = await res.json();
   if (data.ok) { fecharModal(); location.reload(); }

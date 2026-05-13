@@ -48,19 +48,16 @@
                 <td>{{ f.patente_nome }}</td>
                 <td>{{ f.horas }}h {{ f.minutos }}m</td>
                 <td>{{ f.pagamento }}</td>
-                <td style="display:flex;gap:.4rem;flex-wrap:wrap;">
-                  <button class="btn-icon" title="Ver Pontos" onclick="window.location='/meus-pontos?uid={{ f.user_id }}'">
-                    <i class="fas fa-clock"></i>
-                  </button>
-                  <button class="btn-icon" title="Promover" onclick="abrirPromoção({{ f.user_id }}, '{{ f.patente_id }}')">
-                    <i class="fas fa-arrow-up"></i>
-                  </button>
-                  <button class="btn-icon" title="Reset Senha" onclick="resetarSenha({{ f.user_id }})">
-                    <i class="fas fa-key"></i>
-                  </button>
-                  <button class="btn-icon btn-icon-danger" title="Despedir" onclick="despedir({{ f.user_id }}, '{{ f.nome }}')">
-                    <i class="fas fa-user-times"></i>
-                  </button>
+                <td style="text-align:center;">
+                  <div class="actions-dropdown">
+                    <button class="btn-icon" title="Ações"><i class="fas fa-ellipsis-v"></i></button>
+                    <div class="dropdown-content">
+                      <a href="/meus-pontos?uid={{ f.user_id }}"><i class="fas fa-clock"></i> Ver Pontos</a>
+                      <a href="javascript:void(0)" onclick="promoverFunc({{ f.user_id }})"><i class="fas fa-arrow-up text-success"></i> Promover</a>
+                      <a href="javascript:void(0)" onclick="despromoverFunc({{ f.user_id }})"><i class="fas fa-arrow-down text-warning"></i> Despromover</a>
+                      <a href="javascript:void(0)" onclick="despedirFunc({{ f.user_id }})" class="text-danger"><i class="fas fa-user-slash"></i> Despedir</a>
+                    </div>
+                  </div>
                 </td>
               </tr>
               {% endfor %}
@@ -287,5 +284,67 @@ async function encerrarSemana() {
 document.querySelectorAll('.modal-overlay').forEach(function(el) {
   el.addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
 });
+</script>
+<div id="modal-promocao" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3 id="modal-promocao-title" style="margin-bottom:1.5rem;">Alterar Patente</h3>
+    <div class="form-group">
+      <label>Nova Patente</label>
+      <select id="select-nova-patente" class="form-input">
+        {% for p_id, p_info in ordenado_cargos %}
+          <option value="{{ p_id }}">{{ p_info.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;gap:.75rem;">
+      <button class="btn-primary" style="flex:1;" onclick="confirmarPromocao()">Confirmar</button>
+      <button class="btn-secondary" style="flex:1;" onclick="fecharModalPromocao()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentUid = null;
+let currentAction = null;
+
+function promoverFunc(uid) {
+    currentUid = uid;
+    currentAction = 'promote';
+    document.getElementById('modal-promocao-title').innerText = 'Promover Funcionário';
+    document.getElementById('modal-promocao').style.display = 'flex';
+}
+
+function despromoverFunc(uid) {
+    currentUid = uid;
+    currentAction = 'demote';
+    document.getElementById('modal-promocao-title').innerText = 'Despromover Funcionário';
+    document.getElementById('modal-promocao').style.display = 'flex';
+}
+
+function fecharModalPromocao() {
+    document.getElementById('modal-promocao').style.display = 'none';
+}
+
+async function confirmarPromocao() {
+    const patenteId = document.getElementById('select-nova-patente').value;
+    const fd = new FormData();
+    fd.append('action', currentAction);
+    fd.append('patente_id', patenteId);
+    
+    const res = await fetch(`/api/admin/funcionario/${currentUid}/action`, {method: 'POST', body: fd});
+    const data = await res.json();
+    if(data.ok) location.reload();
+    else alert('Erro: ' + data.erro);
+}
+
+async function despedirFunc(uid) {
+    if(!confirm('Tem a certeza que deseja despedir este funcionário? Esta ação irá removê-lo da base de dados e retirar os cargos no Discord.')) return;
+    const fd = new FormData();
+    fd.append('action', 'fire');
+    const res = await fetch(`/api/admin/funcionario/${uid}/action`, {method: 'POST', body: fd});
+    const data = await res.json();
+    if(data.ok) location.reload();
+    else alert('Erro: ' + data.erro);
+}
 </script>
 {% endblock %}
