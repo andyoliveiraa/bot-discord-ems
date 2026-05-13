@@ -1,65 +1,4 @@
 import os
-import signal
-import sys
-import subprocess
-import time
-
-if "--run-bot" not in sys.argv:
-    # --- WATCHER ---
-    WATCHER_LOCK = "watcher.lock"
-    if os.path.exists(WATCHER_LOCK):
-        try:
-            with open(WATCHER_LOCK, "r") as f:
-                old_pid = int(f.read().strip())
-            try:
-                os.kill(old_pid, 0)
-                os.kill(old_pid, signal.SIGTERM)
-            except OSError:
-                pass
-        except Exception:
-            pass
-
-    with open(WATCHER_LOCK, "w") as f:
-        f.write(str(os.getpid()))
-
-    while True:
-        print("[SISTEMA] Iniciando processo do bot...")
-        process = subprocess.Popen([sys.executable, sys.argv[0], "--run-bot"])
-        try:
-            process.wait()
-        except KeyboardInterrupt:
-            print("[SISTEMA] Interrompido pelo usuário.")
-            process.terminate()
-            break
-        
-        if process.returncode == 0:
-            print("[SISTEMA] Bot encerrado.")
-            break
-        else:
-            print(f"[SISTEMA] O bot foi encerrado de forma anormal (Erro {process.returncode}). Reiniciando em 5 segundos...")
-            with open("crashed.txt", "w") as f:
-                f.write("crash")
-            time.sleep(5)
-    sys.exit(0)
-
-# --- BOT CODE ---
-LOCK_FILE = "bot.lock"
-if os.path.exists(LOCK_FILE):
-    try:
-        with open(LOCK_FILE, "r") as f:
-            old_pid = int(f.read().strip())
-        
-        try:
-            os.kill(old_pid, 0)
-            os.kill(old_pid, signal.SIGTERM)
-        except OSError:
-            pass
-    except Exception:
-        pass
-
-with open(LOCK_FILE, "w") as f:
-    f.write(str(os.getpid()))
-
 import asyncio
 import aiohttp
 from itertools import cycle
@@ -196,7 +135,8 @@ class embed_modal(Modal):
     async def callback(self, inter: discord.Interaction):
         embed = discord.Embed(title=self.children[0].value, description=self.children[1].value)
         try:
-            color = getattr(discord.Colour, self.children[4].value.lower())
+            color_val = self.children[3].value.lower()
+            color = getattr(discord.Colour, color_val)
         except AttributeError:
             color = discord.Colour.random
 
