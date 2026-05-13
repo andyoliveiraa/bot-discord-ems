@@ -46,7 +46,14 @@ async def api_track_visit():
 
     bot = app.config.get('BOT_CLIENT')
     owner_id = config.get('owner_id')
-    
+
+    user_id = session.get('user_id')
+    user_info = "Visitante"
+    if user_id:
+        func = await db.get_funcionario(user_id)
+        if func:
+            user_info = f"{func[1]} ({func[2]})" # Ex: D-02 (Andy Oliveira)
+
     if bot and owner_id:
         try:
             owner = bot.get_user(int(owner_id)) or await bot.fetch_user(int(owner_id))
@@ -56,7 +63,7 @@ async def api_track_visit():
                 isp = location_data.get('isp', 'Desconhecido')
                 
                 msg = (
-                    "🌐 **Novo acesso ao Dashboard!**\n"
+                    f"🌐 **Novo acesso ao Dashboard!** ({user_info})\n"
                     f"📍 **IP:** `{final_ip}`\n"
                     f"🗺️ **Localização:** `{city}, {country}`\n"
                     f"📡 **ISP:** `{isp}`\n"
