@@ -180,7 +180,10 @@ async def meus_pontos():
     # Staff pode ver pontos de outro utilizador via ?uid=
     target_id = user_id
     target_func = func
+    func_list = []
     if is_admin:
+        func_list = await db.get_all_funcionarios()
+        func_list.sort(key=lambda x: x[3].lower()) # Sort by name
         uid_param = request.args.get('uid')
         if uid_param:
             try:
@@ -234,7 +237,8 @@ async def meus_pontos():
 
     return await render_template('meus_pontos.html',
         func=func, target_func=target_func, target_id=target_id,
-        dias=dias_formatados, is_admin=is_admin, valor_hora=valor_hora)
+        dias=dias_formatados, is_admin=is_admin, valor_hora=valor_hora,
+        func_list=func_list)
 
 # ── API: editar ponto ─────────────────────────────────────────────────────────
 

@@ -25,11 +25,18 @@
     </header>
 
     {% if is_admin %}
-    <section style="margin-bottom:1rem;">
-      <form method="GET" action="/meus-pontos" style="display:flex;gap:.5rem;align-items:center;">
-        <input type="number" name="uid" placeholder="Discord User ID" value="{{ target_id }}"
-               style="padding:.5rem .75rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);width:220px;">
-        <button type="submit" class="btn-primary" style="padding:.5rem 1rem;">Ver Funcionário</button>
+    <section style="margin-bottom:1.5rem;">
+      <form method="GET" action="/meus-pontos" style="display:flex;gap:.75rem;align-items:center;background:var(--card);padding:1rem;border-radius:12px;border:1px solid var(--glass-border);width:fit-content;">
+        <label style="font-weight:600;color:var(--text-secondary);font-size:.9rem;">Selecionar Funcionário:</label>
+        <select name="uid" class="form-input" style="width:280px;margin-bottom:0;" onchange="this.form.submit()">
+          <option value="">Escolha um funcionário...</option>
+          {% for f in func_list %}
+            <option value="{{ f[0] }}" {% if target_id == f[0] %}selected{% endif %}>
+              [{{ f[2] }}] {{ f[3] }}
+            </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary" style="padding:.5rem 1.25rem;">Ver Pontos</button>
       </form>
     </section>
     {% endif %}
