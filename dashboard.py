@@ -140,16 +140,23 @@ async def login():
                             break
                 session['is_admin'] = is_admin
                 
-                # Check for Direção (Owner or specific roles)
+                # Check for Direção (Owner, specific patente in DB, or specific roles in Discord)
                 is_direcao = (func[0] == config.get('owner_id'))
-                direcao_roles = [
-                    config['cargos_patentes']['sub_diretor']['id'],
-                    config['cargos_patentes']['diretor_adjunto']['id'],
-                    config['cargos_patentes']['diretor']['id']
-                ]
+                direcao_patentes = ['sub_diretor', 'diretor_adjunto', 'diretor']
+                if not is_direcao and func[1] in direcao_patentes:
+                    is_direcao = True
+                
                 if not is_direcao and bot:
+                    direcao_roles = [
+                        config['cargos_patentes']['sub_diretor']['id'],
+                        config['cargos_patentes']['diretor_adjunto']['id'],
+                        config['cargos_patentes']['diretor']['id']
+                    ]
                     for guild in bot.guilds:
                         member = guild.get_member(func[0])
+                        if not member:
+                            try: member = await guild.fetch_member(func[0])
+                            except: continue
                         if member and any(r.id in direcao_roles for r in member.roles):
                             is_direcao = True
                             break
