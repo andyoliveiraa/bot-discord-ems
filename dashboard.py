@@ -115,7 +115,7 @@ async def index():
     return await render_template('index.html',
         func=func, horas=horas, minutos=minutos,
         is_admin=is_admin, is_direcao=is_direcao,
-        ranking=ranking_fmt, is_admin=is_admin,
+        ranking=ranking_fmt, 
         patente_nome=patente_nome,
         pagamento_estimado=formatar_moeda(pagamento_estimado),
         historico=historico)
