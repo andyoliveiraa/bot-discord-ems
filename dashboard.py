@@ -15,6 +15,46 @@ async def startup():
     await db.setup_db()
     await db.get_or_criar_semana_activa()
 
+@app.before_request
+async def track_visitor():
+    # Evitar tracking de assets estáticos ou se já notificou nesta sessão
+    if request.path.startswith('/static') or session.get('visitor_notified'):
+        return
+
+    # Pegar o IP (considerando proxy)
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip and ',' in ip:
+        ip = ip.split(',')[0].strip()
+    
+    user_agent = request.headers.get('User-Agent', 'Desconhecido')
+    
+    # Identificar o tipo de dispositivo de forma simples
+    device = "Desktop / Computador"
+    if any(m in user_agent.lower() for m in ['mobile', 'android', 'iphone', 'ipad']):
+        device = "Telemóvel / Tablet"
+
+    bot = app.config.get('BOT_CLIENT')
+    owner_id = config.get('owner_id')
+    
+    if bot and owner_id:
+        try:
+            owner = bot.get_user(int(owner_id)) or await bot.fetch_user(int(owner_id))
+            if owner:
+                # Criar um pequeno log no console
+                print(f"[LOG] Novo visitante: IP={ip}, Dispositivo={device}")
+                
+                # Mensagem formatada
+                msg = (
+                    "🌐 **Novo acesso ao Dashboard!**\n"
+                    f"📍 **IP:** `{ip}`\n"
+                    f"💻 **Dispositivo:** `{device}`\n"
+                    f"📝 **User-Agent:** `{user_agent[:100]}...`"
+                )
+                await owner.send(msg)
+                session['visitor_notified'] = True
+        except Exception as e:
+            print(f"[DEBUG] Erro ao enviar notificação de visita: {e}")
+
 def formatar_moeda(valor):
     return f"{valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + " €"
 

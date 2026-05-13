@@ -694,7 +694,8 @@ code {
 }
 
 .dropdown-content {
-    display: none;
+    opacity: 0;
+    visibility: hidden;
     position: absolute;
     right: 0;
     top: 100%;
@@ -708,7 +709,7 @@ code {
     z-index: 1000;
     padding: 8px;
     margin-top: 8px;
-    animation: fadeInScale 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.3s ease, visibility 0s linear 4s; /* Delay disappearance by 4s */
 }
 
 @keyframes fadeInScale {
@@ -717,7 +718,9 @@ code {
 }
 
 .actions-dropdown:hover .dropdown-content {
-    display: block;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0s linear 0s; /* Show immediately */
 }
 
 .dropdown-content a {

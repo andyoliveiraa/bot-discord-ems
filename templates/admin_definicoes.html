@@ -35,7 +35,7 @@
         <div class="table-container">
           <table class="modern-table">
             <thead>
-              <tr><th>Avatar</th><th>Callsign</th><th>Nome</th><th>Patente</th><th>Horas Semana</th><th>A Receber</th><th>Ações</th></tr>
+              <tr><th><i class="fas fa-image"></i> Avatar</th><th><i class="fas fa-id-badge"></i> Callsign</th><th><i class="fas fa-user"></i> Nome</th><th><i class="fas fa-briefcase"></i> Patente</th><th><i class="fas fa-clock"></i> Horas Semana</th><th><i class="fas fa-euro-sign"></i> A Receber</th><th><i class="fas fa-tools"></i> Ações</th></tr>
             </thead>
             <tbody>
               {% for f in func_list %}
@@ -74,7 +74,7 @@
         <div class="table-container">
           <table class="modern-table">
             <thead>
-              <tr><th>Patente</th><th>Valor/Hora Actual</th><th>Novo Valor</th><th></th></tr>
+              <tr><th><i class="fas fa-briefcase"></i> Patente</th><th><i class="fas fa-coins"></i> Valor/Hora Actual</th><th><i class="fas fa-edit"></i> Novo Valor</th><th></th></tr>
             </thead>
             <tbody>
               {% for pat_id, pat in cargos.items() %}
@@ -87,7 +87,7 @@
                 </td>
                 <td>
                   <button class="btn-primary" style="padding:.35rem .8rem;font-size:.85rem;"
-                          onclick="updateSalario('{{ pat_id }}')">Guardar</button>
+                          onclick="updateSalario('{{ pat_id }}')"><i class="fas fa-save"></i> Guardar</button>
                 </td>
               </tr>
               {% endfor %}
@@ -121,7 +121,7 @@
         {% if s.pagamentos %}
         <div class="table-container">
           <table class="modern-table">
-            <thead><tr><th>Funcionário</th><th>Valor</th><th>Estado</th><th>Ação</th></tr></thead>
+            <thead><tr><th><i class="fas fa-user"></i> Funcionário</th><th><i class="fas fa-euro-sign"></i> Valor</th><th><i class="fas fa-info-circle"></i> Estado</th><th><i class="fas fa-check-circle"></i> Ação</th></tr></thead>
             <tbody>
               {% for pag in s.pagamentos %}
               <tr id="pag-{{ s.id }}-{{ pag[2] }}">
@@ -138,7 +138,7 @@
                   {% if pag[4] == 0 %}
                   <button class="btn-primary" style="padding:.3rem .7rem;font-size:.8rem;"
                           onclick="marcarPago({{ s.id }}, {{ pag[2] }})">
-                    Marcar Pago
+                    <i class="fas fa-check"></i> Marcar Pago
                   </button>
                   {% endif %}
                 </td>
