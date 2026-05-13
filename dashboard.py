@@ -4,9 +4,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from db import Database, get_configs
 
 app = Quart(__name__)
-app.secret_key = os.urandom(24)
-db = Database('db.sqlite3')
 config = get_configs()
+app.secret_key = config.get('secret_key', 'chave_secreta_padrao_muito_segura_123!')
+db = Database('db.sqlite3')
 
 @app.route('/')
 async def index():
