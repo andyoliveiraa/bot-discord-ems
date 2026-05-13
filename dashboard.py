@@ -110,6 +110,19 @@ def timestamp_semana(ts):
     except Exception:
         return '??/??/????'
 
+@app.template_filter('get_avatar')
+def get_avatar_filter(user_id):
+    bot = app.config.get('BOT_CLIENT')
+    if bot:
+        try:
+            user = bot.get_user(int(user_id))
+            if user:
+                return user.display_avatar.url
+        except Exception:
+            pass
+    # Fallback para o avatar padrão do Discord
+    return f"https://cdn.discordapp.com/embed/avatars/{int(user_id) % 5}.png"
+
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -166,6 +179,7 @@ async def index():
         rh = int(rank[1] // 3600)
         rm = int((rank[1] % 3600) // 60)
         ranking_fmt.append({
+            'user_id': rank[0],
             'nome': nome, 
             'callsign': callsign, 
             'tempo': f"{rh}h {rm}m"

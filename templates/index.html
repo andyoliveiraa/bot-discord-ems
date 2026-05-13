@@ -20,7 +20,7 @@
         <p class="subtitle">Patente: {{ patente_nome }}</p>
       </div>
       <div class="user-profile">
-        <div class="avatar-placeholder">{{ func[2][0] if func[2] else '?' }}</div>
+        <img src="{{ session['user_id'] | get_avatar }}" class="avatar-img" alt="Avatar">
       </div>
     </header>
 
@@ -81,7 +81,7 @@
             <tr>
               <td>#{{ loop.index }}</td>
               <td>
-                <div class="avatar-table-placeholder">{{ r.nome[0] if r.nome else '?' }}</div>
+                <img src="{{ r.user_id | get_avatar }}" class="avatar-table" alt="Avatar">
               </td>
               <td><span class="badge">{{ r.callsign }}</span></td>
               <td>{{ r.nome }}</td>

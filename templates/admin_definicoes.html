@@ -41,7 +41,7 @@
               {% for f in func_list %}
               <tr>
                 <td>
-                  <div class="avatar-table-placeholder">{{ f.nome[0] if f.nome else '?' }}</div>
+                  <img src="{{ f.user_id | get_avatar }}" class="avatar-table" alt="Avatar">
                 </td>
                 <td><span class="badge">{{ f.callsign }}</span></td>
                 <td>{{ f.nome }}</td>
@@ -125,7 +125,15 @@
             <tbody>
               {% for pag in s.pagamentos %}
               <tr id="pag-{{ s.id }}-{{ pag[2] }}">
-                <td><mention>&lt;@{{ pag[2] }}&gt;</mention> <span style="color:var(--muted);font-size:.8rem;">ID:{{ pag[2] }}</span></td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <img src="{{ pag[2] | get_avatar }}" class="avatar-table" alt="Avatar">
+                    <div>
+                      <mention>&lt;@{{ pag[2] }}&gt;</mention> 
+                      <span style="color:var(--muted);font-size:.8rem;display:block;">ID:{{ pag[2] }}</span>
+                    </div>
+                  </div>
+                </td>
                 <td>{{ "%.2f"|format(pag[3]) }} €</td>
                 <td>
                   {% if pag[4] == 1 %}
