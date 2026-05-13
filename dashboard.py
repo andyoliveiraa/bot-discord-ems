@@ -21,13 +21,13 @@ async def api_track_visit():
     if session.get('visitor_notified'):
         return jsonify({'ok': True})
 
-    # Detecção de IP Real (Discloud usa Proxies)
-    # X-Forwarded-For costuma ter uma lista: "client, proxy1, proxy2"
-    ip_headers = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if ip_headers and ',' in ip_headers:
-        final_ip = ip_headers.split(',')[0].strip()
-    else:
-        final_ip = ip_headers
+    # Detecção de IP Real (Suporte para Cloudflare e Proxies)
+    final_ip = request.headers.get('CF-Connecting-IP') or \
+               request.headers.get('X-Real-IP') or \
+               request.headers.get('X-Forwarded-For', request.remote_addr)
+    
+    if final_ip and ',' in final_ip:
+        final_ip = final_ip.split(',')[0].strip()
 
     user_agent = request.headers.get('User-Agent', 'Desconhecido')
     device = "Desktop / Computador"
