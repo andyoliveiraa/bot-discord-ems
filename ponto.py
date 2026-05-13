@@ -373,7 +373,7 @@ class PicaPonto(commands.Cog):
         print('Pica-Ponto carregado com sucesso!')
         await db.setup_db()
         self.client.add_view(view=finalizarPonto())
-        await self.fechar_pontos_pendentes()
+        await self.carregar_pontos_pendentes()
         
         if not self.auto_close_task.is_running():
             self.auto_close_task.start()
@@ -384,7 +384,7 @@ class PicaPonto(commands.Cog):
         if not self.auto_lembrete_pagamentos_task.is_running():
             self.auto_lembrete_pagamentos_task.start()
 
-    async def fechar_pontos_pendentes(self):
+    async def carregar_pontos_pendentes(self):
         import os
         if not os.path.exists(ACTIVE_PONTOS_FILE):
             return
@@ -392,50 +392,25 @@ class PicaPonto(commands.Cog):
         try:
             with open(ACTIVE_PONTOS_FILE, "r") as f:
                 pontos_pendentes = json.load(f)
-        except Exception:
+        except Exception as e:
+            print(f"[ERROR] Falha ao carregar {ACTIVE_PONTOS_FILE}: {e}")
             return
             
         if not pontos_pendentes:
             return
             
-        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
-        canal_log = self.client.get_channel(config["log_channel_id"])
-        
+        # Carrega os pontos de volta para a memória
+        count = 0
         for user_id_str, estado in pontos_pendentes.items():
-            user_id = int(user_id_str)
-            if estado["status"] == "pausado":
-                estado["total_pausa"] += agora - estado["inicio_pausa"]
-                estado["pausas"].append([estado["inicio_pausa"], agora])
-            
-            horario_inicio = estado["inicio"]
-            segundos_totais = agora - horario_inicio - estado["total_pausa"]
-            if segundos_totais < 0: segundos_totais = 0
-            
-            await db.add_time(user_id, segundos_totais)
-            pauses_json = json.dumps(estado["pausas"])
-            await db.create_registry(user_id, horario_inicio, agora, True, segundos_totais, pauses_json)
-            
-            if canal_log:
-                horas, minutos = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
-                data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
-                user = self.client.get_user(user_id)
-                user_mention = user.mention if user else f"<@{user_id}>"
-                
-                embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado Automático (Crash/Restart)**\n**→ `Funcionário`: {user_mention}**\n'
-                    f'**→ `Horário de Abertura`: {data_abertura}**\n'
-                    f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
-                    f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**', colour=discord.Colour.orange())
-                embed_log.set_author(name='LOG: Pica-Ponto fechado pelo Sistema', icon_url=self.client.user.display_avatar)
-                try:
-                    await canal_log.send(embed=embed_log)
-                except Exception:
-                    pass
-                    
-        try:
-            os.remove(ACTIVE_PONTOS_FILE)
-        except:
-            pass
-        active_pontos.clear()
+            try:
+                user_id = int(user_id_str)
+                active_pontos[user_id] = estado
+                count += 1
+            except Exception:
+                continue
+        
+        if count > 0:
+            print(f"[SISTEMA] {count} pica-pontos restaurados com sucesso.")
 
     @commands.slash_command(description='[ADM] Adiciona horas/minutos para uma pessoa no pica-ponto', contexts={discord.InteractionContextType.guild})
     @commands.has_any_role(config['staff_role_id'])

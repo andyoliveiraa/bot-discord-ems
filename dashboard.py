@@ -228,11 +228,11 @@ async def login():
                 print(f"[DEBUG] Login {func[2]} (ID: {func[0]}): is_admin={is_admin}, DB Patente={func[1]}")
                 
                 if not is_direcao and bot:
-                    direcao_roles = [
-                        int(config['cargos_patentes']['sub_diretor']['id']),
-                        int(config['cargos_patentes']['diretor_adjunto']['id']),
-                        int(config['cargos_patentes']['diretor']['id'])
-                    ]
+                    direcao_roles = []
+                    for p_key in ['sub_diretor', 'diretor_adjunto', 'diretor']:
+                        p_info = config.get('cargos_patentes', {}).get(p_key)
+                        if p_info and 'id' in p_info:
+                            direcao_roles.append(int(p_info['id']))
                     print(f"[DEBUG] Checking Direção roles: {direcao_roles}")
                     for guild in bot.guilds:
                         member = guild.get_member(func[0])
@@ -504,7 +504,12 @@ async def api_admin_func_action(uid):
     guild = None
     member = None
     if bot:
-        guild = bot.get_guild(config['guild_id'])
+        guild_id = config.get('guild_id')
+        if guild_id:
+            guild = bot.get_guild(int(guild_id))
+        if not guild and bot.guilds:
+            guild = bot.guilds[0]
+            
         if guild:
             member = guild.get_member(uid)
             if not member:
@@ -515,16 +520,20 @@ async def api_admin_func_action(uid):
         await db.remove_funcionario(uid)
         if member:
             # Tenta remover todos os cargos de patente
-            for p_info in config['cargos_patentes'].values():
-                role = guild.get_role(p_info['id'])
-                if role and role in member.roles:
-                    try: await member.remove_roles(role)
-                    except: pass
+            cargos_patentes = config.get('cargos_patentes', {})
+            for p_info in cargos_patentes.values():
+                role_id = p_info.get('id')
+                if role_id:
+                    role = guild.get_role(role_id)
+                    if role and role in member.roles:
+                        try: await member.remove_roles(role)
+                        except: pass
         return jsonify({'ok': True})
 
     elif action in ['promote', 'demote']:
         new_patente = form.get('patente_id')
-        if not new_patente or new_patente not in config['cargos_patentes']:
+        cargos_patentes = config.get('cargos_patentes', {})
+        if not new_patente or new_patente not in cargos_patentes:
             return jsonify({'erro': 'Patente inválida'}), 400
         
         # Obter dados do funcionário atual
@@ -537,11 +546,12 @@ async def api_admin_func_action(uid):
         
         if member:
             # Trocar cargos no Discord
-            old_role_id = config['cargos_patentes'].get(func[0], {}).get('id')
-            new_role_id = config['cargos_patentes'][new_patente]['id']
+            cargos_patentes = config.get('cargos_patentes', {})
+            old_role_id = cargos_patentes.get(func[0], {}).get('id')
+            new_role_id = cargos_patentes.get(new_patente, {}).get('id')
             
             old_role = guild.get_role(old_role_id) if old_role_id else None
-            new_role = guild.get_role(new_role_id)
+            new_role = guild.get_role(new_role_id) if new_role_id else None
             
             if old_role and old_role in member.roles:
                 try: await member.remove_roles(old_role)
@@ -597,8 +607,11 @@ async def api_promover(uid):
     if not func:
         return jsonify({'erro': 'Funcionário não encontrado'}), 404
 
-    nova_patente_info = config['cargos_patentes'][nova_patente]
-    patente_antiga_info = config['cargos_patentes'].get(func[0], {})
+    cargos_patentes = config.get('cargos_patentes', {})
+    nova_patente_info = cargos_patentes.get(nova_patente)
+    if not nova_patente_info:
+        return jsonify({'erro': 'Configuração da patente não encontrada'}), 400
+    patente_antiga_info = cargos_patentes.get(func[0], {})
     nome_func = func[2]
 
     for guild in bot.guilds:
