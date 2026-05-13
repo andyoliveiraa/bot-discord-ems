@@ -318,6 +318,56 @@ class PicaPonto(commands.Cog):
     async def before_auto_register_task(self):
         await self.client.wait_until_ready()
 
+    @tasks.loop(time=datetime.time(hour=9, minute=0, tzinfo=timezone(config["timezone"])))
+    async def auto_lembrete_pagamentos_task(self):
+        """Envia lembrete diário no canal de log sobre funcionários por pagar."""
+        impagos = await db.get_semanas_com_impagos()
+        if not impagos:
+            return
+
+        canal_log = self.client.get_channel(config["log_channel_id"])
+        if not canal_log:
+            return
+
+        # Agrupa por semana
+        semanas_dict = {}
+        for semana_id, user_id, valor, inicio, fim in impagos:
+            if semana_id not in semanas_dict:
+                semanas_dict[semana_id] = {'inicio': inicio, 'fim': fim, 'funcionarios': []}
+            semanas_dict[semana_id]['funcionarios'].append((user_id, valor))
+
+        def formatar_moeda_local(v):
+            return f"{v:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + " €"
+
+        for semana_id, dados in semanas_dict.items():
+            inicio_str = datetime.datetime.fromtimestamp(
+                dados['inicio'], timezone(config['timezone'])).strftime('%d/%m/%Y')
+            fim_str = datetime.datetime.fromtimestamp(
+                dados['fim'], timezone(config['timezone'])).strftime('%d/%m/%Y') if dados['fim'] else 'N/A'
+
+            desc = f'**⚠️ Semana `{inicio_str}` → `{fim_str}` tem funcionários por pagar:**\n\n'
+            total_em_divida = 0
+            for user_id, valor in dados['funcionarios']:
+                desc += f'**→** <@{user_id}> — `{formatar_moeda_local(valor)}`\n'
+                total_em_divida += valor
+            desc += f'\n**💰 Total em dívida:** `{formatar_moeda_local(total_em_divida)}`'
+            desc += f'\n\n*Marque como pago no painel: `https://ems.discloud.app/admin/definicoes`*'
+
+            embed = discord.Embed(
+                title='💳 Lembrete de Pagamentos em Falta',
+                description=desc,
+                colour=discord.Colour.red()
+            )
+            embed.set_author(name='Sistema de Pagamentos', icon_url=self.client.user.display_avatar)
+            try:
+                await canal_log.send(embed=embed)
+            except Exception as e:
+                print(f"Erro ao enviar lembrete de pagamentos: {e}")
+
+    @auto_lembrete_pagamentos_task.before_loop
+    async def before_auto_lembrete_pagamentos_task(self):
+        await self.client.wait_until_ready()
+
     @commands.Cog.listener()
     async def on_ready(self):
         print('Pica-Ponto carregado com sucesso!')
@@ -331,6 +381,8 @@ class PicaPonto(commands.Cog):
             self.auto_backup_task.start()
         if not self.auto_register_task.is_running():
             self.auto_register_task.start()
+        if not self.auto_lembrete_pagamentos_task.is_running():
+            self.auto_lembrete_pagamentos_task.start()
 
     async def fechar_pontos_pendentes(self):
         import os
@@ -1459,21 +1511,29 @@ class BotoesSemana(View):
         await self._enviar_relatorio(inter)
 
         if self.reset:
+            # Arquiva a semana correctamente (associa pontos, cria pagamentos)
+            resultado = await db.encerrar_semana(config.get('cargos_patentes', {}))
+            # Cria nova semana activa para a próxima semana
+            await db.get_or_criar_semana_activa()
+            # Zera tempo semanal actual
             await db.reset_all_times()
-            await db.reset_all_registries()
+            n_impagos = len(resultado.get('pagamentos', []))
             embed_ok = discord.Embed(
-                title='\u2705 Semana Encerrada',
-                description='Relatório publicado, backup enviado e base de dados resetada com sucesso!',
+                title='\u2705 Semana Encerrada e Arquivada',
+                description=f'Relatório publicado, backup enviado e semana arquivada com sucesso!\n'
+                            f'**{n_impagos}** registo(s) de pagamento criado(s).\n'
+                            f'Utilize o painel admin para marcar pagamentos: `https://ems.discloud.app/admin/definicoes`',
                 color=discord.Colour.green()
             )
             await inter.followup.send(embed=embed_ok, ephemeral=True)
             canal_log = inter.guild.get_channel(config['log_channel_id'])
             embed_log = discord.Embed(
-                description=f'**\u2192 `Staff`: {inter.user.mention}**\n**\u2192 Encerramento semanal efetuado. Base de dados resetada.**',
+                description=f'**\u2192 `Staff`: {inter.user.mention}**\n**\u2192 Encerramento semanal efetuado. Semana arquivada com {n_impagos} pagamentos pendentes.**',
                 colour=discord.Colour.red()
             )
             embed_log.set_author(name='LOG: Encerramento Semanal', icon_url=inter.user.display_avatar)
-            await canal_log.send(embed=embed_log)
+            if canal_log:
+                await canal_log.send(embed=embed_log)
         else:
             embed_ok = discord.Embed(
                 title='\u2705 Relatório Enviado',

@@ -1,67 +1,105 @@
 {% extends "base.html" %}
-
 {% block content %}
 <div class="dashboard-layout">
-    <nav class="sidebar">
-        <div class="logo-container-small">
-            <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
-            <h3>EMS Atlas</h3>
+  <nav class="sidebar">
+    <div class="logo-container-small">
+      <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+      <h3>EMS Atlas</h3>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="active"><i class="fas fa-home"></i> Visão Geral</a></li>
+      <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
+      {% if is_admin %}<li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>{% endif %}
+      <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+    </ul>
+  </nav>
+  <main class="main-content">
+    <header class="dashboard-header">
+      <div>
+        <h2>Bem-vindo(a), <span class="highlight">{{ func[2] }}</span></h2>
+        <p class="subtitle">Patente: {{ patente_nome }}</p>
+      </div>
+      <div class="user-profile">
+        {% if avatar_url %}
+          <img src="{{ avatar_url }}" alt="Avatar" class="avatar-img">
+        {% else %}
+          <div class="avatar-placeholder">{{ func[2][0] if func[2] else '?' }}</div>
+        {% endif %}
+      </div>
+    </header>
+
+    <section class="stats-cards">
+      <div class="stat-card">
+        <div class="icon-box blue"><i class="fas fa-clock"></i></div>
+        <div class="stat-info">
+          <h4>Horas (Semana Actual)</h4>
+          <p class="stat-value">{{ horas }}h {{ minutos }}m</p>
         </div>
-        <ul class="nav-links">
-            <li><a href="/" class="active"><i class="fas fa-home"></i> Visão Geral</a></li>
-            {% if is_admin %}
-            <li><a href="/admin"><i class="fas fa-user-shield"></i> Painel Staff</a></li>
-            {% endif %}
-            <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
-        </ul>
-    </nav>
-    
-    <main class="main-content">
-        <header class="dashboard-header">
-            <div>
-                <h2>Bem-vindo(a), <span class="highlight">{{ func[2] }}</span></h2>
-                <p class="subtitle">Patente: {{ patente_nome }}</p>
-            </div>
-            <div class="user-profile">
-                <div class="avatar-placeholder">{{ func[2][0] if func[2] else '?' }}</div>
-            </div>
-        </header>
+      </div>
+      <div class="stat-card">
+        <div class="icon-box green"><i class="fas fa-euro-sign"></i></div>
+        <div class="stat-info">
+          <h4>A Receber (Estimado)</h4>
+          <p class="stat-value">{{ pagamento_estimado }}</p>
+        </div>
+      </div>
+    </section>
 
-        <section class="stats-cards">
-            <div class="stat-card">
-                <div class="icon-box blue"><i class="fas fa-clock"></i></div>
-                <div class="stat-info">
-                    <h4>Horas Totais (Semana)</h4>
-                    <p class="stat-value">{{ horas }}h {{ minutos }}m</p>
-                </div>
-            </div>
-        </section>
+    {% if historico %}
+    <section class="card" style="margin-bottom:1.5rem;">
+      <h3 style="margin-bottom:1rem;"><i class="fas fa-history highlight"></i> Histórico de Semanas</h3>
+      <div class="table-container">
+        <table class="modern-table">
+          <thead><tr><th>Semana</th><th>Valor</th><th>Estado</th></tr></thead>
+          <tbody>
+            {% for h in historico %}
+            <tr>
+              <td>
+                {% if h[6] %}{{ h[6] | timestamp_semana }}{% else %}—{% endif %}
+                &#8594;
+                {% if h[7] %}{{ h[7] | timestamp_semana }}{% else %}Activa{% endif %}
+              </td>
+              <td>{{ "%.2f"|format(h[2]) }} &#8364;</td>
+              <td>
+                {% if h[3] == 1 %}
+                  <span class="badge badge-ok">Pago</span>
+                {% else %}
+                  <span class="badge badge-danger">Por Pagar</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
 
-        <section class="ranking-section">
-            <h3><i class="fas fa-trophy highlight"></i> Top 10 Funcionários da Semana</h3>
-            <div class="table-container">
-                <table class="modern-table">
-                    <thead>
-                        <tr>
-                            <th>Posição</th>
-                            <th>Callsign</th>
-                            <th>Nome</th>
-                            <th>Tempo Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for r in ranking %}
-                        <tr>
-                            <td>#{{ loop.index }}</td>
-                            <td><span class="badge">{{ r.callsign }}</span></td>
-                            <td>{{ r.nome }}</td>
-                            <td>{{ r.tempo }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </main>
+    <section class="ranking-section">
+      <h3><i class="fas fa-trophy highlight"></i> Top 10 da Semana</h3>
+      <div class="table-container">
+        <table class="modern-table">
+          <thead><tr><th>Pos.</th><th>Avatar</th><th>Callsign</th><th>Nome</th><th>Tempo</th></tr></thead>
+          <tbody>
+            {% for r in ranking %}
+            <tr>
+              <td>#{{ loop.index }}</td>
+              <td>
+                {% if r.avatar_url %}
+                  <img src="{{ r.avatar_url }}" alt="Avatar" class="avatar-table">
+                {% else %}
+                  <div class="avatar-table-placeholder">{{ r.nome[0] if r.nome else '?' }}</div>
+                {% endif %}
+              </td>
+              <td><span class="badge">{{ r.callsign }}</span></td>
+              <td>{{ r.nome }}</td>
+              <td>{{ r.tempo }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 </div>
 {% endblock %}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-layout">
+  <nav class="sidebar">
+    <div class="logo-container-small">
+      <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+      <h3>EMS Atlas</h3>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
+      <li><a href="/meus-pontos" class="active"><i class="fas fa-clock"></i> Meus Pontos</a></li>
+      {% if is_admin %}<li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>{% endif %}
+      <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+    </ul>
+  </nav>
+  <main class="main-content">
+    <header class="dashboard-header">
+      <div>
+        <h2>Registos de <span class="highlight">Pica-Ponto</span></h2>
+        <p class="subtitle">Semana actual — apenas pontos da semana em curso</p>
+      </div>
+      <div class="user-profile">
+        {% if avatar_url %}
+          <img src="{{ avatar_url }}" alt="Avatar" class="avatar-img">
+        {% else %}
+          <div class="avatar-placeholder">{{ target_func[2][0] if target_func[2] else '?' }}</div>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if is_admin %}
+    <section style="margin-bottom:1rem;">
+      <form method="GET" action="/meus-pontos" style="display:flex;gap:.5rem;align-items:center;">
+        <input type="number" name="uid" placeholder="Discord User ID" value="{{ target_id }}"
+               style="padding:.5rem .75rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);width:220px;">
+        <button type="submit" class="btn-primary" style="padding:.5rem 1rem;">Ver Funcionário</button>
+      </form>
+    </section>
+    {% endif %}
+
+    {% if dias %}
+      {% for dia in dias %}
+      <section class="card" style="margin-bottom:1.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h3><i class="fas fa-calendar-day highlight"></i> {{ dia.dia }}</h3>
+          <span class="badge" style="font-size:1rem;padding:.4rem .9rem;">
+            &#9201; {{ dia.total_h }}h {{ dia.total_m }}m
+          </span>
+        </div>
+        <div class="table-container">
+          <table class="modern-table">
+            <thead>
+              <tr>
+                <th>Entrada</th><th>Saída</th><th>Duração</th><th>Estado</th><th>Pausas</th>
+                {% if is_admin %}<th>Ações</th>{% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for reg in dia.registros %}
+              <tr id="row-{{ reg.id }}">
+                <td>{{ reg.hr_in }}</td>
+                <td>{{ reg.hr_out }}</td>
+                <td>
+                  {% if reg.cancelado %}
+                    <span style="color:#ff4444;">0h 0m</span>
+                  {% else %}
+                    {{ reg.duration_h }}h {{ reg.duration_m }}m
+                  {% endif %}
+                </td>
+                <td>
+                  {% if reg.cancelado %}
+                    <span class="badge badge-danger">Não Contabilizado</span>
+                  {% elif reg.staff_finished and reg.staff_finished > 10000 %}
+                    <span class="badge badge-warn">Fechado Staff</span>
+                  {% else %}
+                    <span class="badge badge-ok">Contabilizado</span>
+                  {% endif %}
+                </td>
+                <td style="font-size:.82rem;">
+                  {% if reg.pausas %}
+                    {% for p in reg.pausas %}
+                      <div>&#9208; {{ p[0] | timestamp_fmt }} &#8594; {{ p[1] | timestamp_fmt }}</div>
+                    {% endfor %}
+                  {% else %}—{% endif %}
+                </td>
+                {% if is_admin %}
+                <td>
+                  {% if not reg.cancelado %}
+                  <button class="btn-icon" title="Editar" onclick="abrirModal({{ reg.id }}, {{ reg.duration_seg }})">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="btn-icon btn-icon-danger" title="Cancelar" onclick="cancelarPonto({{ reg.id }})">
+                    <i class="fas fa-times"></i>
+                  </button>
+                  {% endif %}
+                </td>
+                {% endif %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endfor %}
+    {% else %}
+      <div class="card" style="text-align:center;padding:3rem;">
+        <p style="color:var(--muted);">Nenhum ponto registado esta semana.</p>
+      </div>
+    {% endif %}
+  </main>
+</div>
+
+{% if is_admin %}
+<div id="modal-overlay" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3 style="margin-bottom:1.5rem;"><i class="fas fa-edit highlight"></i> Editar Ponto</h3>
+    <div class="form-group">
+      <label>Acção</label>
+      <select id="modal-action" class="form-input">
+        <option value="add_time">Adicionar horas</option>
+        <option value="remove_time">Remover horas</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;">
+      <div class="form-group" style="flex:1;margin-bottom:0;">
+        <label>Horas</label>
+        <input type="number" id="modal-horas" class="form-input" min="0" value="0">
+      </div>
+      <div class="form-group" style="flex:1;margin-bottom:0;">
+        <label>Minutos</label>
+        <input type="number" id="modal-minutos" class="form-input" min="0" max="59" value="0">
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem;">
+      <button class="btn-primary" style="flex:1;" onclick="confirmarEdicao()">Confirmar</button>
+      <button class="btn-secondary" style="flex:1;" onclick="fecharModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var pontoAtivo = null;
+
+function abrirModal(id, durSeg) {
+  pontoAtivo = id;
+  document.getElementById('modal-overlay').style.display = 'flex';
+  document.getElementById('modal-horas').value = 0;
+  document.getElementById('modal-minutos').value = 0;
+}
+
+function fecharModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+  pontoAtivo = null;
+}
+
+async function confirmarEdicao() {
+  var action = document.getElementById('modal-action').value;
+  var horas = document.getElementById('modal-horas').value;
+  var minutos = document.getElementById('modal-minutos').value;
+  var fd = new FormData();
+  fd.append('action', action);
+  fd.append('horas', horas);
+  fd.append('minutos', minutos);
+  var res = await fetch('/api/ponto/' + pontoAtivo + '/editar', {method: 'POST', body: fd});
+  var data = await res.json();
+  if (data.ok) { fecharModal(); location.reload(); }
+  else { alert('Erro: ' + data.erro); }
+}
+
+async function cancelarPonto(id) {
+  if (!confirm('Cancelar este ponto? As horas serão removidas do total semanal.')) return;
+  var fd = new FormData();
+  fd.append('action', 'cancel');
+  var res = await fetch('/api/ponto/' + id + '/editar', {method: 'POST', body: fd});
+  var data = await res.json();
+  if (data.ok) { location.reload(); }
+  else { alert('Erro: ' + data.erro); }
+}
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModal();
+});
+</script>
+{% endif %}
+{% endblock %}

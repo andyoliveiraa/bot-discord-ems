@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-layout">
+  <nav class="sidebar">
+    <div class="logo-container-small">
+      <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+      <h3>EMS Atlas</h3>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
+      <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
+      <li><a href="/admin/definicoes" class="active"><i class="fas fa-cogs"></i> Administração</a></li>
+      <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+    </ul>
+  </nav>
+  <main class="main-content">
+    <header class="dashboard-header">
+      <div>
+        <h2>Painel <span class="highlight">Administrativo</span></h2>
+        <p class="subtitle">Gestão de funcionários, salários e pagamentos</p>
+      </div>
+    </header>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('funcionarios')">Funcionários</button>
+      <button class="tab-btn" onclick="showTab('salarios')">Salários</button>
+      <button class="tab-btn" onclick="showTab('semanas')">Semanas</button>
+    </div>
+
+    <!-- TAB: FUNCIONÁRIOS -->
+    <div id="tab-funcionarios" class="tab-content active">
+      <div class="card">
+        <h3 style="margin-bottom:1rem;"><i class="fas fa-users highlight"></i> Funcionários Actuais</h3>
+        <div class="table-container">
+          <table class="modern-table">
+            <thead>
+              <tr><th>Avatar</th><th>Callsign</th><th>Nome</th><th>Patente</th><th>Horas Semana</th><th>A Receber</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+              {% for f in func_list %}
+              <tr>
+                <td>
+                  {% if f.avatar_url %}
+                    <img src="{{ f.avatar_url }}" alt="Avatar" class="avatar-table">
+                  {% else %}
+                    <div class="avatar-table-placeholder">{{ f.nome[0] if f.nome else '?' }}</div>
+                  {% endif %}
+                </td>
+                <td><span class="badge">{{ f.callsign }}</span></td>
+                <td>{{ f.nome }}</td>
+                <td>{{ f.patente_nome }}</td>
+                <td>{{ f.horas }}h {{ f.minutos }}m</td>
+                <td>{{ f.pagamento }}</td>
+                <td style="display:flex;gap:.4rem;flex-wrap:wrap;">
+                  <button class="btn-icon" title="Ver Pontos" onclick="window.location='/meus-pontos?uid={{ f.user_id }}'">
+                    <i class="fas fa-clock"></i>
+                  </button>
+                  <button class="btn-icon" title="Promover" onclick="abrirPromoção({{ f.user_id }}, '{{ f.patente_id }}')">
+                    <i class="fas fa-arrow-up"></i>
+                  </button>
+                  <button class="btn-icon" title="Reset Senha" onclick="resetarSenha({{ f.user_id }})">
+                    <i class="fas fa-key"></i>
+                  </button>
+                  <button class="btn-icon btn-icon-danger" title="Despedir" onclick="despedir({{ f.user_id }}, '{{ f.nome }}')">
+                    <i class="fas fa-user-times"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: SALÁRIOS -->
+    <div id="tab-salarios" class="tab-content">
+      <div class="card">
+        <h3 style="margin-bottom:1rem;"><i class="fas fa-euro-sign highlight"></i> Salário por Patente (€/hora)</h3>
+        <div class="table-container">
+          <table class="modern-table">
+            <thead>
+              <tr><th>Patente</th><th>Valor/Hora Actual</th><th>Novo Valor</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for pat_id, pat in cargos.items() %}
+              <tr>
+                <td>{{ pat.nome }}</td>
+                <td id="val-{{ pat_id }}">{{ pat.valor_hora }}</td>
+                <td>
+                  <input type="number" id="inp-{{ pat_id }}" class="form-input" value="{{ pat.valor_hora }}"
+                         style="width:140px;padding:.35rem .6rem;">
+                </td>
+                <td>
+                  <button class="btn-primary" style="padding:.35rem .8rem;font-size:.85rem;"
+                          onclick="updateSalario('{{ pat_id }}')">Guardar</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: SEMANAS -->
+    <div id="tab-semanas" class="tab-content">
+      <div class="card" style="margin-bottom:1.5rem;">
+        <h3 style="margin-bottom:1rem;"><i class="fas fa-calendar-week highlight"></i> Encerrar Semana Actual</h3>
+        <p style="color:var(--muted);margin-bottom:1rem;">Arquiva a semana actual, cria registos de pagamento e inicia uma nova semana.</p>
+        <button class="btn-danger" onclick="encerrarSemana()"><i class="fas fa-lock"></i> Encerrar Semana</button>
+      </div>
+
+      {% for s in semanas %}
+      <div class="card" style="margin-bottom:1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+          <h4>
+            {% if s.encerrada %}
+              <span class="badge badge-danger">Encerrada</span>
+            {% else %}
+              <span class="badge badge-ok">Activa</span>
+            {% endif %}
+            Semana {{ s.inicio }} &#8594; {{ s.fim }}
+          </h4>
+          <span style="color:var(--muted);font-size:.85rem;">{{ s.total_pago }}/{{ s.total }} pagos</span>
+        </div>
+        {% if s.pagamentos %}
+        <div class="table-container">
+          <table class="modern-table">
+            <thead><tr><th>Funcionário</th><th>Valor</th><th>Estado</th><th>Ação</th></tr></thead>
+            <tbody>
+              {% for pag in s.pagamentos %}
+              <tr id="pag-{{ s.id }}-{{ pag[2] }}">
+                <td><mention>&lt;@{{ pag[2] }}&gt;</mention> <span style="color:var(--muted);font-size:.8rem;">ID:{{ pag[2] }}</span></td>
+                <td>{{ "%.2f"|format(pag[3]) }} €</td>
+                <td>
+                  {% if pag[4] == 1 %}
+                    <span class="badge badge-ok">Pago</span>
+                  {% else %}
+                    <span class="badge badge-danger">Por Pagar</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if pag[4] == 0 %}
+                  <button class="btn-primary" style="padding:.3rem .7rem;font-size:.8rem;"
+                          onclick="marcarPago({{ s.id }}, {{ pag[2] }})">
+                    Marcar Pago
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal Promoção -->
+<div id="modal-promocao" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3 style="margin-bottom:1.5rem;"><i class="fas fa-arrow-up highlight"></i> Promover Funcionário</h3>
+    <input type="hidden" id="promo-uid">
+    <div class="form-group">
+      <label>Nova Patente</label>
+      <select id="promo-patente" class="form-input">
+        {% for pat_id, pat in cargos.items() %}
+        <option value="{{ pat_id }}">{{ pat.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Motivo</label>
+      <input type="text" id="promo-motivo" class="form-input" placeholder="Motivo da promoção">
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:.5rem;">
+      <button class="btn-primary" style="flex:1;" onclick="confirmarPromocao()">Confirmar</button>
+      <button class="btn-secondary" style="flex:1;" onclick="fecharModalPromocao()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Despedir -->
+<div id="modal-despedir" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3 style="margin-bottom:1.5rem;"><i class="fas fa-user-times highlight"></i> Despedir Funcionário</h3>
+    <input type="hidden" id="desp-uid">
+    <p id="desp-nome" style="margin-bottom:1rem;color:var(--muted);"></p>
+    <div class="form-group">
+      <label>Motivo</label>
+      <input type="text" id="desp-motivo" class="form-input" placeholder="Motivo do despedimento">
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:.5rem;">
+      <button class="btn-danger" style="flex:1;" onclick="confirmarDespedir()">Confirmar</button>
+      <button class="btn-secondary" style="flex:1;" onclick="fecharModalDespedir()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+async function resetarSenha(uid) {
+  if (!confirm('Resetar senha deste funcionário?')) return;
+  var res = await fetch('/api/funcionario/' + uid + '/resetar-senha', {method: 'POST'});
+  var data = await res.json();
+  if (data.ok) {
+    alert('Link de reset: ' + data.link + (data.dm_enviada ? '\n(DM enviada ao funcionário)' : '\n(DM não enviada — copia o link manualmente)'));
+  } else { alert('Erro: ' + data.erro); }
+}
+
+function abrirPromoção(uid, patAtual) {
+  document.getElementById('promo-uid').value = uid;
+  document.getElementById('promo-patente').value = patAtual;
+  document.getElementById('promo-motivo').value = '';
+  document.getElementById('modal-promocao').style.display = 'flex';
+}
+
+function fecharModalPromocao() { document.getElementById('modal-promocao').style.display = 'none'; }
+
+async function confirmarPromocao() {
+  var uid = document.getElementById('promo-uid').value;
+  var patente = document.getElementById('promo-patente').value;
+  var motivo = document.getElementById('promo-motivo').value || 'Dashboard';
+  var fd = new FormData();
+  fd.append('patente', patente);
+  fd.append('motivo', motivo);
+  var res = await fetch('/api/funcionario/' + uid + '/promover', {method: 'POST', body: fd});
+  var data = await res.json();
+  if (data.ok) { fecharModalPromocao(); location.reload(); }
+  else { alert('Erro: ' + data.erro); }
+}
+
+function despedir(uid, nome) {
+  document.getElementById('desp-uid').value = uid;
+  document.getElementById('desp-nome').textContent = 'Funcionário: ' + nome;
+  document.getElementById('desp-motivo').value = '';
+  document.getElementById('modal-despedir').style.display = 'flex';
+}
+
+function fecharModalDespedir() { document.getElementById('modal-despedir').style.display = 'none'; }
+
+async function confirmarDespedir() {
+  var uid = document.getElementById('desp-uid').value;
+  var motivo = document.getElementById('desp-motivo').value || 'Sem motivo';
+  var fd = new FormData();
+  fd.append('motivo', motivo);
+  var res = await fetch('/api/funcionario/' + uid + '/despedir', {method: 'POST', body: fd});
+  var data = await res.json();
+  if (data.ok) { fecharModalDespedir(); location.reload(); }
+  else { alert('Erro: ' + data.erro); }
+}
+
+async function updateSalario(patId) {
+  var valor = document.getElementById('inp-' + patId).value;
+  var fd = new FormData();
+  fd.append('patente_id', patId);
+  fd.append('valor_hora', valor);
+  var res = await fetch('/api/config/salario', {method: 'POST', body: fd});
+  var data = await res.json();
+  if (data.ok) { document.getElementById('val-' + patId).textContent = valor; alert('Salário actualizado!'); }
+  else { alert('Erro: ' + data.erro); }
+}
+
+async function marcarPago(semanaId, uid) {
+  var res = await fetch('/api/pagamento/' + semanaId + '/' + uid + '/marcar-pago', {method: 'POST'});
+  var data = await res.json();
+  if (data.ok) { location.reload(); }
+  else { alert('Erro: ' + data.erro); }
+}
+
+async function encerrarSemana() {
+  if (!confirm('Encerrar a semana activa? Esta acção não pode ser desfeita.')) return;
+  var res = await fetch('/api/semana/encerrar', {method: 'POST'});
+  var data = await res.json();
+  if (data.ok) { alert('Semana encerrada! ' + data.pagamentos + ' pagamento(s) criado(s).'); location.reload(); }
+  else { alert('Erro: ' + data.erro); }
+}
+
+document.querySelectorAll('.modal-overlay').forEach(function(el) {
+  el.addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
+});
+</script>
+{% endblock %}
