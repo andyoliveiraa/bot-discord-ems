@@ -20,8 +20,20 @@ async def api_track_visit():
     if session.get('visitor_notified'):
         return jsonify({'ok': True})
 
-    data = await request.get_json()
-    ip = data.get('ip', 'Desconhecido')
+    # Detecção de IP via Headers (Útil para Discloud/Proxies)
+    ip_headers = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip_headers and ',' in ip_headers:
+        ip_headers = ip_headers.split(',')[0].strip()
+
+    try:
+        data = await request.get_json()
+    except Exception:
+        data = {}
+        
+    ip_client = data.get('ip')
+    # Prioriza o IP do cliente se existir, senão usa o dos headers
+    final_ip = ip_client if ip_client and ip_client != 'Desconhecido' else ip_headers
+    
     user_agent = request.headers.get('User-Agent', 'Desconhecido')
     
     device = "Desktop / Computador"
@@ -31,18 +43,23 @@ async def api_track_visit():
     bot = app.config.get('BOT_CLIENT')
     owner_id = config.get('owner_id')
     
+    print(f"[TRACK] Tentativa de notificação. IP: {final_ip}, OwnerID: {owner_id}, Bot: {'OK' if bot else 'Erro'}")
+
     if bot and owner_id:
         try:
             owner = bot.get_user(int(owner_id)) or await bot.fetch_user(int(owner_id))
             if owner:
                 msg = (
                     "🌐 **Novo acesso ao Dashboard!**\n"
-                    f"📍 **IP Real:** `{ip}`\n"
+                    f"📍 **IP:** `{final_ip}`\n"
                     f"💻 **Dispositivo:** `{device}`\n"
                     f"📝 **User-Agent:** `{user_agent[:100]}...`"
                 )
                 await owner.send(msg)
                 session['visitor_notified'] = True
+                print(f"[TRACK] Notificação enviada para {owner_id}")
+            else:
+                print(f"[TRACK] Owner {owner_id} não encontrado")
         except Exception as e:
             print(f"[DEBUG] Erro ao enviar notificação de visita: {e}")
     
