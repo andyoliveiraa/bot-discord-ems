@@ -29,21 +29,6 @@ def recarregar_config():
     except ImportError:
         pass
 
-async def get_user_avatar(user_id):
-    bot = app.config.get('BOT_CLIENT')
-    if bot:
-        try:
-            # Pega do cache primeiro
-            user = bot.get_user(int(user_id))
-            if not user:
-                # Se não no cache, faz fetch
-                user = await bot.fetch_user(int(user_id))
-            if user:
-                return user.display_avatar.url
-        except Exception:
-            pass
-    return None
-
 @app.template_filter('timestamp_fmt')
 def timestamp_fmt(ts):
     import datetime
@@ -117,16 +102,13 @@ async def index():
         callsign = r_user[1] if r_user else ''
         rh = int(rank[1] // 3600)
         rm = int((rank[1] % 3600) // 60)
-        avatar = await get_user_avatar(rank[0])
         ranking_fmt.append({
             'nome': nome, 
             'callsign': callsign, 
-            'tempo': f"{rh}h {rm}m",
-            'avatar_url': avatar
+            'tempo': f"{rh}h {rm}m"
         })
 
     historico = await db.get_pagamentos_user(user_id)
-    avatar_url = await get_user_avatar(user_id)
 
     is_admin = session.get('is_admin', False)
     return await render_template('index.html',
@@ -134,8 +116,7 @@ async def index():
         ranking=ranking_fmt, is_admin=is_admin,
         patente_nome=patente_nome,
         pagamento_estimado=formatar_moeda(pagamento_estimado),
-        historico=historico,
-        avatar_url=avatar_url)
+        historico=historico)
 
 # ── login / logout ────────────────────────────────────────────────────────────
 
@@ -332,8 +313,7 @@ async def admin_definicoes():
             'patente_nome': patente_info.get('nome', pat_id),
             'callsign': callsign, 'nome': nome,
             'horas': h, 'minutos': m,
-            'pagamento': formatar_moeda(pagamento),
-            'avatar_url': await get_user_avatar(uid)
+            'pagamento': formatar_moeda(pagamento)
         })
 
     semanas_info = []

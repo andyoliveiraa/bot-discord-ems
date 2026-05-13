@@ -20,11 +20,7 @@
         <p class="subtitle">Patente: {{ patente_nome }}</p>
       </div>
       <div class="user-profile">
-        {% if avatar_url %}
-          <img src="{{ avatar_url }}" alt="Avatar" class="avatar-img">
-        {% else %}
-          <div class="avatar-placeholder">{{ func[2][0] if func[2] else '?' }}</div>
-        {% endif %}
+        <div class="avatar-placeholder">{{ func[2][0] if func[2] else '?' }}</div>
       </div>
     </header>
 
@@ -85,11 +81,7 @@
             <tr>
               <td>#{{ loop.index }}</td>
               <td>
-                {% if r.avatar_url %}
-                  <img src="{{ r.avatar_url }}" alt="Avatar" class="avatar-table">
-                {% else %}
-                  <div class="avatar-table-placeholder">{{ r.nome[0] if r.nome else '?' }}</div>
-                {% endif %}
+                <div class="avatar-table-placeholder">{{ r.nome[0] if r.nome else '?' }}</div>
               </td>
               <td><span class="badge">{{ r.callsign }}</span></td>
               <td>{{ r.nome }}</td>

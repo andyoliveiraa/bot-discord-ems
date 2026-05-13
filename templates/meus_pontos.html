@@ -20,11 +20,7 @@
         <p class="subtitle">Semana actual — apenas pontos da semana em curso</p>
       </div>
       <div class="user-profile">
-        {% if avatar_url %}
-          <img src="{{ avatar_url }}" alt="Avatar" class="avatar-img">
-        {% else %}
-          <div class="avatar-placeholder">{{ target_func[2][0] if target_func[2] else '?' }}</div>
-        {% endif %}
+        <div class="avatar-placeholder">{{ target_func[2][0] if target_func[2] else '?' }}</div>
       </div>
     </header>
 
