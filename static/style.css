@@ -227,6 +227,17 @@ body {
     display: flex;
     flex-direction: column;
     box-shadow: 10px 0 30px rgba(0, 0, 0, 0.2);
+    height: 100vh;
+    position: sticky;
+    top: 0;
+}
+
+.main-content {
+    flex: 1;
+    padding: 48px;
+    background: var(--bg-main);
+    overflow-y: auto;
+    height: 100vh;
 }
 
 .logo-container-small {

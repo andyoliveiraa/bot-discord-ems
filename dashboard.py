@@ -111,8 +111,10 @@ async def index():
     historico = await db.get_pagamentos_user(user_id)
 
     is_admin = session.get('is_admin', False)
+    is_direcao = session.get('is_direcao', False)
     return await render_template('index.html',
         func=func, horas=horas, minutos=minutos,
+        is_admin=is_admin, is_direcao=is_direcao,
         ranking=ranking_fmt, is_admin=is_admin,
         patente_nome=patente_nome,
         pagamento_estimado=formatar_moeda(pagamento_estimado),
@@ -146,20 +148,31 @@ async def login():
                 if not is_direcao and func[1] in direcao_patentes:
                     is_direcao = True
                 
+                print(f"[DEBUG] Login {func[2]} (ID: {func[0]}): is_admin={is_admin}, DB Patente={func[1]}")
+                
                 if not is_direcao and bot:
                     direcao_roles = [
-                        config['cargos_patentes']['sub_diretor']['id'],
-                        config['cargos_patentes']['diretor_adjunto']['id'],
-                        config['cargos_patentes']['diretor']['id']
+                        int(config['cargos_patentes']['sub_diretor']['id']),
+                        int(config['cargos_patentes']['diretor_adjunto']['id']),
+                        int(config['cargos_patentes']['diretor']['id'])
                     ]
+                    print(f"[DEBUG] Checking Direção roles: {direcao_roles}")
                     for guild in bot.guilds:
                         member = guild.get_member(func[0])
                         if not member:
                             try: member = await guild.fetch_member(func[0])
-                            except: continue
-                        if member and any(r.id in direcao_roles for r in member.roles):
-                            is_direcao = True
-                            break
+                            except Exception as e: 
+                                print(f"[DEBUG] Fetch member error in guild {guild.id}: {e}")
+                                continue
+                        
+                        if member:
+                            member_role_ids = [r.id for r in member.roles]
+                            print(f"[DEBUG] Member roles in {guild.name}: {member_role_ids}")
+                            if any(rid in direcao_roles for rid in member_role_ids):
+                                is_direcao = True
+                                break
+                
+                print(f"[DEBUG] Final is_direcao result: {is_direcao}")
                 session['is_direcao'] = is_direcao
                 return redirect(url_for('index'))
             else:
@@ -225,6 +238,7 @@ async def meus_pontos():
         if data_str not in por_dia:
             por_dia[data_str] = {'registros': [], 'total_seg': 0}
         por_dia[data_str]['total_seg'] += duration if duration else 0
+
 
         import json
         try:
@@ -398,6 +412,8 @@ async def admin_definicoes():
         func_list=func_list, 
         semanas=semanas_info, 
         cargos=cargos,
+        is_admin=session.get('is_admin'),
+        is_direcao=session.get('is_direcao'),
         ordenado_cargos=sorted(cargos.items(), key=lambda x: x[1].get('valor_hora', 0), reverse=True))
 
 @app.route('/api/admin/funcionario/<int:uid>/action', methods=['POST'])
