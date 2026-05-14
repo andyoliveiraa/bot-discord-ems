@@ -397,15 +397,19 @@ async def api_editar_ponto(ponto_id):
             str_in = form.get('hr_in')
             str_out = form.get('hr_out')
             
-            # Precisamos manter a data original do ponto
-            base_date = datetime.datetime.fromtimestamp(ponto[2]).date()
+            # Precisamos manter a data original do ponto no fuso horário configurado
+            tz_obj = tz(config.get('timezone', 'UTC'))
+            base_date = datetime.datetime.fromtimestamp(ponto[2], tz_obj).date()
             
             t_in = datetime.datetime.strptime(str_in, '%H:%M').time()
             t_out = datetime.datetime.strptime(str_out, '%H:%M').time()
             
-            # Criar novos timestamps
-            new_in = int(datetime.datetime.combine(base_date, t_in).timestamp())
-            new_out = int(datetime.datetime.combine(base_date, t_out).timestamp())
+            # Criar novos datetimes localizados
+            dt_in = tz_obj.localize(datetime.datetime.combine(base_date, t_in))
+            dt_out = tz_obj.localize(datetime.datetime.combine(base_date, t_out))
+            
+            new_in = int(dt_in.timestamp())
+            new_out = int(dt_out.timestamp())
             
             # Se a saída for antes da entrada, assume que virou o dia (adiciona 24h)
             if new_out < new_in:
