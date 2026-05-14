@@ -16,6 +16,7 @@ config = get_configs()
 db = Database('db.sqlite3')
 
 client = commands.Bot(command_prefix=".", help_command=None, intents=discord.Intents().all())
+client.config = config # Permite acesso fácil à config pelo bot e dashboard
 client.load_extension('ponto')
 
 # Sincroniza config inicial com o módulo ponto
@@ -216,9 +217,10 @@ async def ping(ctx: discord.ApplicationContext):
     embed.set_footer(text=f'{config.get("server_name", "EMS")} • 2026', icon_url=client.user.display_avatar)
     await ctx.respond(embed=embed)
 
-# Inicialização final do bot usando o token do ambiente
-token = os.getenv('BOT_TOKEN') or config.get('token')
-if token:
-    client.run(token)
-else:
-    print("[ERRO] Token do bot não encontrado no .env ou no config.json!")
+if __name__ == "__main__":
+    # Inicialização final do bot usando o token do ambiente
+    token = os.getenv('BOT_TOKEN') or config.get('token')
+    if token:
+        client.run(token)
+    else:
+        print("[ERRO] Token do bot não encontrado no .env ou no config.json!")

@@ -126,11 +126,14 @@ async def recarregar_config():
     except ImportError:
         pass
     
-    # Sincroniza config com o módulo main (bot)
+    # Sincroniza config com o objeto bot
     bot = app.config.get('BOT_CLIENT')
     if bot:
-        import main
-        main.config = config
+        # Se o bot tem o atributo config (definido no main.py), atualiza-o
+        if hasattr(bot, 'config'):
+            bot.config.update(config)
+        else:
+            bot.config = config
 
 @app.template_filter('timestamp_fmt')
 def timestamp_fmt(ts):
