@@ -51,7 +51,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     position: relative;
 }
@@ -845,4 +845,69 @@ code {
     .dashboard-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
     .user-profile { align-self: flex-end; }
     .modal-box { width: 90%; padding: 1.5rem; }
+}
+
+/* -- FOOTER --------------------------------------------------- */
+.main-footer {
+    width: 100%;
+    padding: 24px;
+    margin-top: auto;
+    border-top: 1px solid var(--glass-border);
+    background: rgba(10, 13, 20, 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.footer-content p {
+    margin: 0;
+}
+
+.footer-content span {
+    color: var(--accent-blue);
+    font-weight: 700;
+    margin-left: 4px;
+}
+
+.github-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+}
+
+.github-link:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+    border-color: var(--accent-blue);
+    box-shadow: 0 5px 15px rgba(59, 130, 246, 0.2);
+}
+
+.github-link i {
+    font-size: 18px;
+}
+
+@media (max-width: 600px) {
+    .footer-content {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
 }
