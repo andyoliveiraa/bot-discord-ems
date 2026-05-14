@@ -110,6 +110,28 @@
 </div>
 
 <script>
+let currentVersion = null;
+
+async function checkVersion() {
+    try {
+        const res = await fetch('/api/active-ponto/version');
+        const data = await res.json();
+        
+        if (currentVersion === null) {
+            currentVersion = data.version;
+        } else if (currentVersion !== data.version) {
+            // Se houver modal aberto, não recarregar para não perder a edição
+            if (document.getElementById('editModal').style.display !== 'flex') {
+                window.location.reload();
+            }
+        }
+    } catch (err) {
+        console.error('Erro ao verificar versão:', err);
+    }
+}
+
+setInterval(checkVersion, 5000); // Verifica a cada 5 segundos
+
 function updateChronometers() {
     const now = Math.floor(Date.now() / 1000);
     document.querySelectorAll('.chrono').forEach(el => {

@@ -432,6 +432,13 @@ async def api_editar_ponto(ponto_id):
 
     return jsonify({'erro': 'Acção inválida'}), 400
 
+@app.route('/api/active-ponto/version')
+async def api_active_ponto_version():
+    if not session.get('is_admin'):
+        return jsonify({'erro': 'Não autorizado'}), 403
+    import ponto
+    return jsonify({'version': ponto.active_pontos_version})
+
 @app.route('/admin/pontos-abertos')
 async def admin_pontos_abertos():
     if not session.get('is_admin'):

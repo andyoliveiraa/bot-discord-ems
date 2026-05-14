@@ -16,6 +16,7 @@ db = Database('db.sqlite3')
 config = get_configs()
 
 active_pontos = {}
+active_pontos_version = 0
 ACTIVE_PONTOS_FILE = "active_pontos.json"
 
 def formatar_moeda(valor: float) -> str:
@@ -110,6 +111,8 @@ async def gerar_pdf_semanal(top_todos, guild):
     return file_path
 
 def save_active_pontos():
+    global active_pontos_version
+    active_pontos_version += 1
     import json
     with open(ACTIVE_PONTOS_FILE, "w") as f:
         json.dump(active_pontos, f)
