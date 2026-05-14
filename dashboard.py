@@ -5,6 +5,8 @@ import aiohttp
 import secrets
 from werkzeug.security import check_password_hash, generate_password_hash
 from db import Database, get_configs, save_configs
+import datetime
+from pytz import timezone as tz
 
 app = Quart(__name__)
 config = get_configs()
@@ -94,8 +96,6 @@ def recarregar_config():
 
 @app.template_filter('timestamp_fmt')
 def timestamp_fmt(ts):
-    import datetime
-    from pytz import timezone as tz
     try:
         return datetime.datetime.fromtimestamp(int(ts), tz(config.get('timezone', 'UTC'))).strftime('%H:%M')
     except Exception:
@@ -103,8 +103,6 @@ def timestamp_fmt(ts):
 
 @app.template_filter('timestamp_semana')
 def timestamp_semana(ts):
-    import datetime
-    from pytz import timezone as tz
     try:
         return datetime.datetime.fromtimestamp(int(ts), tz(config.get('timezone', 'UTC'))).strftime('%d/%m/%Y')
     except Exception:
@@ -283,8 +281,6 @@ async def reset_password(token):
 @app.route('/meus-pontos')
 @login_required
 async def meus_pontos():
-    import datetime
-    from pytz import timezone as tz
     user_id = session['user_id']
     func = await db.get_funcionario(user_id)
     is_admin = session.get('is_admin', False)
@@ -420,12 +416,11 @@ async def api_editar_ponto(ponto_id):
             # Diferença para atualizar o total do usuário
             diff = new_duration - duration_actual
             
-            async with db.pool.connect() as conn: # Usando pool se disponível ou connector direto
-                await db.update_ponto_times(ponto_id, new_in, new_out, new_duration)
-                if diff > 0:
-                    await db.add_time(user_id, diff)
-                elif diff < 0:
-                    await db.del_time(user_id, abs(diff))
+            await db.update_ponto_times(ponto_id, new_in, new_out, new_duration)
+            if diff > 0:
+                await db.add_time(user_id, diff)
+            elif diff < 0:
+                await db.del_time(user_id, abs(diff))
                     
             return jsonify({'ok': True})
         except Exception as e:
@@ -471,8 +466,6 @@ async def admin_definicoes():
     semanas_info = []
     for s in semanas:
         sid, inicio, fim, encerrada = s
-        import datetime
-        from pytz import timezone as tz
         tz_cfg = config.get('timezone', 'UTC')
         inicio_str = datetime.datetime.fromtimestamp(inicio, tz(tz_cfg)).strftime('%d/%m/%Y')
         fim_str = datetime.datetime.fromtimestamp(fim, tz(tz_cfg)).strftime('%d/%m/%Y') if fim else 'Activa'
