@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Pontos Abertos - EMS Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-layout">
+  <nav class="sidebar">
+    <div class="logo-container-small">
+      <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+      <h3>EMS Atlas</h3>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
+      <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
+      <li><a href="/admin/pontos-abertos" class="active"><i class="fas fa-eye"></i> Pontos Abertos</a></li>
+      {% if is_admin %}<li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>{% endif %}
+      <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+    </ul>
+  </nav>
+  <main class="main-content">
+    <header class="dashboard-header">
+      <div>
+        <h2>Pontos <span class="highlight">Abertos</span></h2>
+        <p class="subtitle">Monitorização em tempo real dos funcionários em serviço</p>
+      </div>
+    </header>
+
+    <div class="card">
+        <div class="table-container">
+            <table class="modern-table">
+                <thead>
+                    <tr>
+                        <th>Funcionário</th>
+                        <th>Início</th>
+                        <th>Status</th>
+                        <th>Tempo Decorrido</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in pontos %}
+                    <tr id="row-{{ p.user_id }}">
+                        <td>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <img src="{{ p.avatar or '/static/default_avatar.png' }}" class="avatar-table" onerror="this.src='/static/default_avatar.png'">
+                                <div>
+                                    <span class="badge" style="display:block;margin-bottom:2px;">{{ p.callsign }}</span>
+                                    <span style="font-weight:600;">{{ p.nome }}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ p.inicio | timestamp_fmt }}</td>
+                        <td>
+                            {% if p.pausado %}
+                            <span class="badge badge-warning"><i class="fas fa-pause"></i> Pausado</span>
+                            {% else %}
+                            <span class="badge badge-success"><i class="fas fa-play"></i> Em Serviço</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="chrono" data-start="{{ p.inicio }}" data-pausa="{{ p.total_pausa }}" data-status="{{ p.status }}" data-inicio-pausa="{{ p.inicio_pausa }}">
+                                00:00:00
+                            </span>
+                        </td>
+                        <td>
+                            <div style="display:flex;gap:12px;">
+                                <button class="btn-icon btn-edit" title="Editar Início" onclick="openEditModal({{ p.user_id }}, '{{ p.inicio | timestamp_fmt }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-icon btn-close" title="Fechar (Contabiliza)" onclick="closePonto({{ p.user_id }}, true)">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                </button>
+                                <button class="btn-icon btn-warning" title="Fechar (Não Contabiliza)" onclick="closePonto({{ p.user_id }}, false)">
+                                    <i class="fas fa-user-slash"></i>
+                                </button>
+                                <button class="btn-icon btn-cancel" title="Cancelar" onclick="cancelPonto({{ p.user_id }})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align:center;padding:3rem;color:var(--muted);">Nenhum funcionário com o ponto aberto no momento.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal de Edição -->
+<div id="editModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:400px;">
+        <h3 style="margin-bottom:1.5rem;"><i class="fas fa-edit highlight"></i> Ajustar Início do Ponto</h3>
+        <form id="editForm">
+            <input type="hidden" id="editUserId">
+            <div class="form-group">
+                <label>Novo Horário de Início (HH:MM):</label>
+                <input type="time" id="newStartTime" class="form-input" required>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:1.5rem;">
+                <button type="submit" class="btn-primary" style="flex:1;">Salvar</button>
+                <button type="button" class="btn-secondary" style="flex:1;" onclick="closeModal()">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function updateChronometers() {
+    const now = Math.floor(Date.now() / 1000);
+    document.querySelectorAll('.chrono').forEach(el => {
+        const start = parseInt(el.getAttribute('data-start'));
+        const totalPausa = parseInt(el.getAttribute('data-pausa') || 0);
+        const status = el.getAttribute('data-status');
+        const inicioPausa = parseInt(el.getAttribute('data-inicio-pausa') || 0);
+        
+        let diff;
+        if (status === 'pausado') {
+            diff = inicioPausa - start - totalPausa;
+        } else {
+            diff = now - start - totalPausa;
+        }
+        
+        if (diff < 0) diff = 0;
+        
+        const h = Math.floor(diff / 3600);
+        const m = Math.floor((diff % 3600) / 60);
+        const s = diff % 60;
+        el.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    });
+}
+
+setInterval(updateChronometers, 1000);
+updateChronometers();
+
+function openEditModal(userId, currentTime) {
+    document.getElementById('editUserId').value = userId;
+    document.getElementById('newStartTime').value = currentTime;
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+document.getElementById('editForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('editUserId').value;
+    const newTime = document.getElementById('newStartTime').value;
+    
+    const formData = new FormData();
+    formData.append('new_time', newTime);
+    
+    try {
+        const response = await fetch(`/api/active-ponto/${userId}/edit`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        if (data.ok) {
+            window.location.reload();
+        } else {
+            alert('Erro: ' + (data.erro || 'Desconhecido'));
+        }
+    } catch (err) {
+        alert('Erro ao processar pedido.');
+    }
+};
+
+async function closePonto(userId, contabiliza) {
+    if (!confirm(`Deseja realmente fechar este ponto ${contabiliza ? 'CONTABILIZANDO' : 'SEM CONTABILIZAR'} as horas?`)) return;
+    
+    const formData = new FormData();
+    formData.append('contabiliza', contabiliza);
+    
+    try {
+        const response = await fetch(`/api/active-ponto/${userId}/close`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        if (data.ok) {
+            document.getElementById(`row-${userId}`).remove();
+        } else {
+            alert('Erro: ' + (data.erro || 'Desconhecido'));
+        }
+    } catch (err) {
+        alert('Erro ao processar pedido.');
+    }
+}
+
+async function cancelPonto(userId) {
+    if (!confirm('Deseja realmente CANCELAR este ponto? Ele não será contabilizado e ficará marcado como cancelado.')) return;
+    
+    try {
+        const response = await fetch(`/api/active-ponto/${userId}/cancel`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (data.ok) {
+            document.getElementById(`row-${userId}`).remove();
+        } else {
+            alert('Erro: ' + (data.erro || 'Desconhecido'));
+        }
+    } catch (err) {
+        alert('Erro ao processar pedido.');
+    }
+}
+
+// Fechar modal ao clicar fora
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}

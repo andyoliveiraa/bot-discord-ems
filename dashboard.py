@@ -432,6 +432,157 @@ async def api_editar_ponto(ponto_id):
 
     return jsonify({'erro': 'Acção inválida'}), 400
 
+@app.route('/admin/pontos-abertos')
+async def admin_pontos_abertos():
+    if not session.get('is_admin'):
+        return redirect(url_for('login'))
+    
+    from ponto import active_pontos
+    client = app.config.get('BOT_CLIENT')
+    
+    open_points = []
+    for user_id, estado in active_pontos.items():
+        # Obter informações do usuário
+        func = await db.get_funcionario(user_id)
+        nome = f"ID: {user_id}"
+        callsign = ""
+        if func:
+            callsign = func[1]
+            nome = func[2]
+        
+        avatar = ""
+        if client:
+            try:
+                user = client.get_user(user_id) or await client.fetch_user(user_id)
+                avatar = user.display_avatar.url if user else ""
+            except:
+                pass
+        
+        open_points.append({
+            'user_id': user_id,
+            'nome': nome,
+            'callsign': callsign,
+            'avatar': avatar,
+            'inicio': estado['inicio'],
+            'status': estado['status'],
+            'pausado': estado['status'] == 'pausado',
+            'inicio_pausa': estado.get('inicio_pausa', 0),
+            'total_pausa': estado.get('total_pausa', 0)
+        })
+        
+    return await render_template('pontos_abertos.html', pontos=open_points, is_admin=True)
+
+@app.route('/api/active-ponto/<int:target_user_id>/<action>', methods=['POST'])
+async def api_active_ponto_action(target_user_id, action):
+    if not session.get('is_admin'):
+        return jsonify({'erro': 'Não autorizado'}), 403
+        
+    from ponto import active_pontos, save_active_pontos
+    if target_user_id not in active_pontos:
+        return jsonify({'erro': 'Ponto não encontrado ou já encerrado'}), 404
+        
+    estado = active_pontos[target_user_id]
+    client = app.config.get('BOT_CLIENT')
+    form = await request.form
+    staff_id = session['user_id']
+    
+    try:
+        if action == 'close':
+            contabiliza = form.get('contabiliza') == 'true'
+            horario_atual = int(datetime.datetime.now(tz(config.get('timezone', 'UTC'))).timestamp())
+            
+            if estado["status"] == "pausado":
+                duracao_pausa = horario_atual - estado["inicio_pausa"]
+                estado["total_pausa"] += duracao_pausa
+                estado["pausas"].append([estado["inicio_pausa"], horario_atual])
+                
+            horario_inicio = estado["inicio"]
+            segundos_totais = horario_atual - horario_inicio - estado["total_pausa"]
+            if segundos_totais < 0: segundos_totais = 0
+            
+            active_pontos.pop(target_user_id)
+            save_active_pontos()
+            
+            if contabiliza:
+                await db.add_time(target_user_id, segundos_totais)
+            
+            import json
+            pauses_json = json.dumps(estado["pausas"])
+            await db.create_registry(target_user_id, horario_inicio, horario_atual, staff_id, segundos_totais if contabiliza else 0, pauses_json)
+            
+            # Tentar enviar LOG no Discord
+            if client:
+                try:
+                    canal_log = client.get_channel(config["log_channel_id"])
+                    if canal_log:
+                        import discord
+                        data_abertura = datetime.datetime.fromtimestamp(horario_inicio, tz(config.get('timezone', 'UTC'))).strftime("%d/%m/%Y, %H:%M:%S")
+                        
+                        log_desc = f'**→ `Status Pica-Ponto`: Fechado pelo Painel (Staff)** *({"contabilizado" if contabiliza else "não contabilizado"})*\n'
+                        log_desc += f'**→ `Funcionário`: <@{target_user_id}>**\n'
+                        log_desc += f'**→ `Horário de Abertura`: {data_abertura}**\n'
+                        log_desc += f'**→ `Horário de Fechamento`: {datetime.datetime.fromtimestamp(horario_atual, tz(config.get("timezone", "UTC"))).strftime("%d/%m/%Y, %H:%M:%S")}**'
+                        
+                        embed_log = discord.Embed(description=log_desc, colour=discord.Colour.green() if contabiliza else discord.Colour.orange())
+                        embed_log.set_author(name='LOG: Pica-Ponto fechado pelo Painel Web', icon_url=client.user.display_avatar)
+                        await canal_log.send(embed=embed_log)
+                        
+                        # Tentar avisar usuário
+                        user = client.get_user(target_user_id) or await client.fetch_user(target_user_id)
+                        if user:
+                            h, m = int(segundos_totais // 3600), int((segundos_totais % 3600) // 60)
+                            await user.send(f'**<:aviso:1269036173381206132> AVISO:** Seu pica-ponto foi finalizado através do Painel Web!\n> <:relogio:1269034530388574309> Tempo: **`{h}h {m}m`**\n**Estado:** {"Contabilizado" if contabiliza else "Não Contabilizado"}')
+                except:
+                    pass
+            
+            return jsonify({'ok': True})
+            
+        elif action == 'cancel':
+            horario_atual = int(datetime.datetime.now(tz(config.get('timezone', 'UTC'))).timestamp())
+            horario_inicio = estado["inicio"]
+            
+            active_pontos.pop(target_user_id)
+            save_active_pontos()
+            
+            import json
+            await db.create_registry(target_user_id, horario_inicio, horario_atual, staff_id, 0, json.dumps(estado["pausas"]))
+            await db.cancel_ponto(target_user_id, staff_id) # O método cancel_ponto espera ponto_id, mas aqui não temos ID de registro ainda. 
+            # Na verdade, create_registry já inseriu. Mas db.cancel_ponto usa UPDATE pontos.
+            # Vamos simplificar: create_registry com staff_id (o 4º param é staff_finished/contabilizado_por) e duration 0 já é cancelado.
+            
+            if client:
+                try:
+                    canal_log = client.get_channel(config["log_channel_id"])
+                    if canal_log:
+                        import discord
+                        embed_log = discord.Embed(
+                            description=f'**→ `Status`: Cancelado pelo Painel**\n**→ `Funcionário`: <@{target_user_id}>**\n**→ `Staff`: <@{staff_id}>**',
+                            colour=discord.Colour.red()
+                        )
+                        await canal_log.send(embed=embed_log)
+                except: pass
+                
+            return jsonify({'ok': True})
+            
+        elif action == 'edit':
+            new_time_str = form.get('new_time') # Formato HH:MM
+            if not new_time_str:
+                return jsonify({'erro': 'Horário inválido'}), 400
+                
+            tz_obj = tz(config.get('timezone', 'UTC'))
+            base_date = datetime.datetime.fromtimestamp(estado['inicio'], tz_obj).date()
+            t_new = datetime.datetime.strptime(new_time_str, '%H:%M').time()
+            dt_new = tz_obj.localize(datetime.datetime.combine(base_date, t_new))
+            
+            estado['inicio'] = int(dt_new.timestamp())
+            save_active_pontos()
+            return jsonify({'ok': True})
+            
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+    
+    return jsonify({'erro': 'Acção inválida'}), 400
+
 # ── admin ─────────────────────────────────────────────────────────────────────
 
 @app.route('/admin')

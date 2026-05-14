@@ -586,7 +586,34 @@ body {
     font-weight: 700;
     letter-spacing: 0.5px;
     border: 1px solid rgba(59, 130, 246, 0.2);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
+
+.badge-success {
+    background: rgba(40, 167, 69, 0.15);
+    color: #28a745;
+    border-color: rgba(40, 167, 69, 0.2);
+}
+
+.badge-warning {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.2);
+}
+
+.chrono {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--accent-blue);
+    text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+.btn-close { color: #28a745; }
+.btn-cancel { color: #ff4444; }
+.btn-edit { color: var(--accent-blue); }
 
 .admin-actions {
     display: flex;
