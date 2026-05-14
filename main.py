@@ -9,39 +9,59 @@ from discord.ext import commands
 from discord.commands import Option
 from discord.ui import InputText, Modal, Button, View
 from datetime import datetime
-from db import get_configs
+from db import get_configs, Database
+
+# Configuração inicial
+config = get_configs()
+db = Database('db.sqlite3')
 
 client = commands.Bot(command_prefix=".", help_command=None, intents=discord.Intents().all())
 client.load_extension('ponto')
 
-config = get_configs()
+# Sincroniza config inicial com o módulo ponto
+try:
+    import ponto
+    ponto.config = config
+except ImportError:
+    pass
 
 async def att_status():
-    status = cycle(["🛠️ Desenvolvido por andyydias", f"⚔ {config['server_name']}"])
+    """Loop de status dinâmico baseado na base de dados."""
     while True:
-        new_status = next(status)
-        await client.change_presence(activity=discord.Game(name=new_status))
-        await asyncio.sleep(40)
-        if new_status == f"⚔ {config['server_name']}":  # Quando estiver no último status ↓
-            users = sum(guild.member_count for guild in client.guilds) if client.guilds else 0
-            await client.change_presence(activity=discord.Game(name=f'👮️ Gerenciando {users} funcionários!'))
-            await asyncio.sleep(50)
+        try:
+            # Pega as configurações mais recentes (podem ter sido alteradas via dashboard)
+            statuses = config.get('rp_statuses', ["🛠️ Desenvolvido por andyydias", f"⚔ {config.get('server_name', 'EMS')}"])
+            interval = config.get('rp_interval', 40)
+            
+            for base_msg in statuses:
+                # Substituir variáveis dinâmicas
+                users_count = sum(guild.member_count for guild in client.guilds) if client.guilds else 0
+                msg = base_msg.replace('{server_name}', config.get('server_name', 'EMS'))
+                msg = msg.replace('{users}', str(users_count))
+                
+                await client.change_presence(activity=discord.Game(name=msg))
+                await asyncio.sleep(interval)
+        except Exception as e:
+            print(f"[DEBUG] Erro no loop de status: {e}")
+            await asyncio.sleep(60)
 
 @client.event
 async def on_ready():
-    print('Bot está online!')
+    print(f'Bot {client.user} está online!')
     
+    # Notificação de reinício após crash
     if os.path.exists("crashed.txt"):
         try:
             dono_id = config.get("owner_id")
             if dono_id:
-                dono = await client.fetch_user(dono_id)
-                agora = datetime.now(pytz.timezone(config['timezone'])).strftime("%d/%m/%Y %H:%M:%S")
+                dono = await client.fetch_user(int(dono_id))
+                agora = datetime.now(pytz.timezone(config.get('timezone', 'Europe/Lisbon'))).strftime("%d/%m/%Y %H:%M:%S")
                 await dono.send(f"⚠️ **AVISO DO SISTEMA** ⚠️\nO bot encontrou um erro crítico e foi **reiniciado automaticamente** em `{agora}`.")
             os.remove("crashed.txt")
         except Exception as e:
             print("Erro ao enviar aviso de reinício:", e)
 
+    # Inicia tasks se ainda não existirem
     if not hasattr(client, 'status_task'):
         client.status_task = client.loop.create_task(att_status())
         
@@ -54,9 +74,23 @@ async def on_ready():
 
 @client.event
 async def on_application_command(ctx: discord.ApplicationContext):
-    agora = datetime.now(pytz.timezone(config['timezone'])).strftime("%d/%m/%Y %H:%M:%S")
+    agora = datetime.now(pytz.timezone(config.get('timezone', 'Europe/Lisbon'))).strftime("%d/%m/%Y %H:%M:%S")
     canal = f"#{ctx.channel.name}" if hasattr(ctx.channel, 'name') else "DM"
     print(f"[{agora}] 🔧 Comando executado: /{ctx.command.name} | Usuário: {ctx.author} | Sala: {canal} | Servidor: {ctx.guild.name if ctx.guild else 'DM'}")
+    
+    # Gravar log de comando na base de dados
+    await db.add_log(
+        categoria='comando',
+        user_id=ctx.author.id,
+        mensagem=f"Comando /{ctx.command.name} executado",
+        detalhes={
+            'comando': ctx.command.name,
+            'canal': canal,
+            'guild': ctx.guild.name if ctx.guild else 'DM',
+            'user': str(ctx.author)
+        },
+        cor='info'
+    )
 
 @client.event
 async def on_application_command_error(ctx: discord.ApplicationContext, error: discord.DiscordException):
@@ -90,17 +124,30 @@ async def on_application_command_error(ctx: discord.ApplicationContext, error: d
     if isinstance(original, discord.HTTPException) and original.code == 40060:
         return
 
-    canallog = client.get_channel(config['log_channel_id'])
-    if ctx.command is None:
-        comando = "Nenhum/Invalído"
-    else:
-        comando = ctx.command
-    embedlog = discord.Embed(title='ERRO!', description=f'Comando utilizado: `{comando}`\nServidor: `{ctx.guild.name} / {ctx.guild.id}`\nCanal do comando: `{ctx.channel} / {ctx.channel.id}`\nAutor do comando: {ctx.author.mention} `/ {ctx.author.id}`\n\n**ERRO:**\n```py\n{error}\n```', color=discord.Colour.red())
-    embedlog.set_footer(text='Developed by andyydias')
-    if canallog:
-        await canallog.send(embed=embedlog)
-    else:
-        print(f"[ERRO] Canal de logs (ID: {config['log_channel_id']}) não encontrado. Erro ao executar {comando}: {error}")
+    log_channel_id = config.get('log_channel_id')
+    if log_channel_id:
+        canallog = client.get_channel(int(log_channel_id))
+        comando = ctx.command if ctx.command else "Invalído"
+        
+        # Gravar log de erro na base de dados
+        await db.add_log(
+            categoria='erro',
+            user_id=ctx.author.id if ctx.author else 0,
+            mensagem=f"Erro no comando /{comando}: {str(error)[:100]}",
+            detalhes={
+                'erro': str(error),
+                'comando': str(comando),
+                'user': str(ctx.author) if ctx.author else 'Sistema'
+            },
+            cor='danger'
+        )
+
+        embedlog = discord.Embed(title='ERRO!', description=f'Comando utilizado: `{comando}`\nServidor: `{ctx.guild.name} / {ctx.guild.id}`\nCanal do comando: `{ctx.channel} / {ctx.channel.id}`\nAutor do comando: {ctx.author.mention} `/ {ctx.author.id}`\n\n**ERRO:**\n```py\n{error}\n```', color=discord.Colour.red())
+        embedlog.set_footer(text=f'Developed by andyydias • {config.get("server_name", "EMS")}')
+        if canallog:
+            await canallog.send(embed=embedlog)
+        else:
+            print(f"[ERRO] Canal de logs (ID: {log_channel_id}) não encontrado. Erro ao executar {comando}: {error}")
 
 @client.slash_command(description='[ADM] Adiciona cargo a um usuário', contexts={discord.InteractionContextType.guild})
 @commands.has_guild_permissions(administrator=True)
@@ -112,8 +159,9 @@ async def addrole(ctx: discord.ApplicationContext, cargo: Option(discord.Role, "
 @client.slash_command(description='Envia uma mensagem EMBED!', contexts={discord.InteractionContextType.guild})
 @commands.has_guild_permissions(administrator=True)
 async def embed(ctx: discord.ApplicationContext):
+    serv_name = config.get('server_name', 'EMS')
     embed = discord.Embed(title='Gerenciador de Embed', description='**Para enviar uma mensagem com o mesmo visual que esta (padrão embed), clique no botão abaixo, e preencha apenas os campos que você deseja.**', color=discord.Colour.red())
-    embed.set_footer(text=f'{config["server_name"]} • 2026', icon_url=client.user.display_avatar)
+    embed.set_footer(text=f'{serv_name} • 2026', icon_url=client.user.display_avatar)
     create_embed = Button(label='Criar Embed', style=discord.ButtonStyle.blurple, emoji='🛠')
     async def button_callback(inter: discord.Interaction):
         await inter.response.send_modal(embed_modal(ctx))
@@ -143,8 +191,8 @@ class embed_modal(Modal):
         if self.children[2].value.startswith('http:') or self.children[2].value.startswith('https:'):
             embed.set_thumbnail(url=self.children[2].value)
 
-        embed.color = color()
-        embed.set_footer(text=f'{config["server_name"]} • 2026', icon_url=client.user.display_avatar)
+        embed.color = color() if callable(color) else color
+        embed.set_footer(text=f'{config.get("server_name", "EMS")} • 2026', icon_url=client.user.display_avatar)
         await inter.channel.send(embed=embed)
         await inter.response.send_message(f'<a:check:1269034091882221710> Embed criada com sucesso em {inter.channel.mention}!', ephemeral=True)
 
@@ -165,10 +213,12 @@ async def ping(ctx: discord.ApplicationContext):
         description=f"**Status:** Online 🟢\n**Latência:** `{latency}ms`",
         color=discord.Colour.green()
     )
-    embed.set_footer(text=f'{config["server_name"]} • 2026', icon_url=client.user.display_avatar)
+    embed.set_footer(text=f'{config.get("server_name", "EMS")} • 2026', icon_url=client.user.display_avatar)
     await ctx.respond(embed=embed)
 
-
-
-
-client.run(config['token'])
+# Inicialização final do bot usando o token do ambiente
+token = os.getenv('BOT_TOKEN') or config.get('token')
+if token:
+    client.run(token)
+else:
+    print("[ERRO] Token do bot não encontrado no .env ou no config.json!")

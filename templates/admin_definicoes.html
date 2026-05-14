@@ -11,6 +11,10 @@
       <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
       <li><a href="/admin/pontos-abertos"><i class="fas fa-eye"></i> Pontos Abertos</a></li>
       <li><a href="/admin/definicoes" class="active"><i class="fas fa-cogs"></i> Administração</a></li>
+      <li><a href="/admin/logs"><i class="fas fa-list-alt"></i> Logs do Sistema</a></li>
+      {% if session.get('user_id')|string == config.get('owner_id')|string %}
+      <li><a href="/admin/configuracoes"><i class="fas fa-tools"></i> Configurações</a></li>
+      {% endif %}
       <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
     </ul>
   </nav>

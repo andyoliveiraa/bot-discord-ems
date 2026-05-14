@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid p-0" style="animation: fadeIn 0.8s ease-out;">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="glass-card p-4 d-flex align-items-center justify-content-between">
+                <div>
+                    <h1 class="m-0 text-white" style="font-weight: 800; letter-spacing: -1px;">
+                        <i class="fas fa-cogs me-3 text-primary"></i>Configurações do Sistema
+                    </h1>
+                    <p class="text-white-50 m-0 mt-1">Gerencie as patentes, canais de log e presença do bot.</p>
+                </div>
+                <div class="status-badge bg-primary-soft text-primary px-3 py-2 rounded-pill border border-primary">
+                    <i class="fas fa-crown me-2"></i>Acesso Proprietário
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sidebar Tabs -->
+        <div class="col-lg-3">
+            <div class="glass-card p-3 mb-4 sticky-top" style="top: 20px;">
+                <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                    <button class="nav-link active mb-2 text-start p-3 rounded-4" id="v-pills-geral-tab" data-bs-toggle="pill" data-bs-target="#v-pills-geral" type="button" role="tab">
+                        <i class="fas fa-sliders-h me-3"></i>Geral
+                    </button>
+                    <button class="nav-link mb-2 text-start p-3 rounded-4" id="v-pills-patentes-tab" data-bs-toggle="pill" data-bs-target="#v-pills-patentes" type="button" role="tab">
+                        <i class="fas fa-id-badge me-3"></i>Patentes / Salários
+                    </button>
+                    <button class="nav-link mb-2 text-start p-3 rounded-4" id="v-pills-presence-tab" data-bs-toggle="pill" data-bs-target="#v-pills-presence" type="button" role="tab">
+                        <i class="fas fa-broadcast-tower me-3"></i>Rich Presence
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="col-lg-9">
+            <form id="configForm" action="{{ url_for('admin_configuracoes_save') }}" method="POST">
+                <div class="tab-content" id="v-pills-tabContent">
+                    
+                    <!-- Geral -->
+                    <div class="tab-pane fade show active" id="v-pills-geral" role="tabpanel">
+                        <div class="glass-card p-4">
+                            <h4 class="text-white mb-4"><i class="fas fa-info-circle me-2 text-primary"></i>Informações Gerais</h4>
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">Nome do Servidor</label>
+                                    <input type="text" name="server_name" class="form-control glass-input" value="{{ configs.get('server_name', '') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">Nome da Corporação (Acrónimo)</label>
+                                    <input type="text" name="nome_corp" class="form-control glass-input" value="{{ configs.get('nome_corp', '') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">ID do Canal de Logs (Ponto)</label>
+                                    <input type="number" name="log_channel_id" class="form-control glass-input" value="{{ configs.get('log_channel_id', '') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">ID do Canal de Logs (Contratações)</label>
+                                    <input type="number" name="log_contratacoes_id" class="form-control glass-input" value="{{ configs.get('log_contratacoes_id', '') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">ID do Cargo Staff (Permite /deltempo, etc)</label>
+                                    <input type="number" name="staff_role_id" class="form-control glass-input" value="{{ configs.get('staff_role_id', '') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">ID do Cargo Equipa (Geral)</label>
+                                    <input type="number" name="cargo_equipa_id" class="form-control glass-input" value="{{ configs.get('cargo_equipa_id', '') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">Timezone (ex: Europe/Lisbon)</label>
+                                    <input type="text" name="timezone" class="form-control glass-input" value="{{ configs.get('timezone', 'Europe/Lisbon') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white-50">ID do Proprietário (Acesso a esta aba)</label>
+                                    <input type="number" name="owner_id" class="form-control glass-input" value="{{ configs.get('owner_id', '') }}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Patentes -->
+                    <div class="tab-pane fade" id="v-pills-patentes" role="tabpanel">
+                        <div class="glass-card p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h4 class="text-white m-0"><i class="fas fa-award me-2 text-primary"></i>Gestão de Patentes</h4>
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="addPatente()">
+                                    <i class="fas fa-plus me-1"></i>Adicionar Patente
+                                </button>
+                            </div>
+                            
+                            <div id="patentesContainer">
+                                {% for key, val in configs.get('cargos_patentes', {}).items() %}
+                                <div class="patente-item glass-card-inner p-3 mb-3 border-start border-4 border-primary" data-id="{{ key }}">
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <label class="small text-white-50">ID (slug)</label>
+                                            <input type="text" name="p_slug[]" class="form-control form-control-sm glass-input" value="{{ key }}" placeholder="ex: diretor">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small text-white-50">Nome de Exibição</label>
+                                            <input type="text" name="p_nome[]" class="form-control form-control-sm glass-input" value="{{ val.get('nome', '') }}" placeholder="Diretor">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small text-white-50">ID do Cargo (Discord)</label>
+                                            <input type="number" name="p_role[]" class="form-control form-control-sm glass-input" value="{{ val.get('id', '') }}">
+                                        </div>
+                                        <div class="col-md-1">
+                                            <label class="small text-white-50">Letra</label>
+                                            <input type="text" name="p_letra[]" class="form-control form-control-sm glass-input text-center" value="{{ val.get('letra', '') }}" maxlength="1">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="small text-white-50">Valor/Hora (€)</label>
+                                            <input type="number" name="p_valor[]" class="form-control form-control-sm glass-input" value="{{ val.get('valor_hora', 0) }}">
+                                        </div>
+                                        <div class="col-12 d-flex justify-content-end">
+                                            <button type="button" class="btn btn-link text-danger p-0" onclick="removePatente(this)">
+                                                <i class="fas fa-trash-alt me-1"></i>Remover
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Presence -->
+                    <div class="tab-pane fade" id="v-pills-presence" role="tabpanel">
+                        <div class="glass-card p-4">
+                            <h4 class="text-white mb-4"><i class="fas fa-play-circle me-2 text-primary"></i>Discord Rich Presence</h4>
+                            <p class="text-white-50 small mb-4">Configure as mensagens que aparecem no status do bot. Você pode usar {server_name} e {users} como variáveis.</p>
+                            
+                            <div class="mb-4">
+                                <label class="form-label text-white-50">Intervalo de Rotação (segundos)</label>
+                                <input type="number" name="rp_interval" class="form-control glass-input w-25" value="{{ configs.get('rp_interval', 40) }}">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label text-white-50">Status (Um por linha)</label>
+                                <textarea name="rp_statuses" class="form-control glass-input" rows="6" placeholder="🛠️ Desenvolvido por andyydias&#10;⚔ {server_name}&#10;👮️ Gerenciando {users} funcionários!">{{ configs.get('rp_statuses', ["🛠️ Desenvolvido por andyydias", "⚔ {server_name}", "👮️ Gerenciando {users} funcionários!"]) | join('\n') }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-4 glass-card p-3 d-flex justify-content-end gap-2">
+                    <a href="{{ url_for('admin_definicoes') }}" class="btn btn-outline-light rounded-pill px-4">Cancelar</a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 shadow-lg">
+                        <i class="fas fa-save me-2"></i>Guardar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function addPatente() {
+    const container = document.getElementById('patentesContainer');
+    const html = `
+    <div class="patente-item glass-card-inner p-3 mb-3 border-start border-4 border-primary" style="animation: slideInLeft 0.3s ease-out;">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="small text-white-50">ID (slug)</label>
+                <input type="text" name="p_slug[]" class="form-control form-control-sm glass-input" placeholder="ex: estagiario">
+            </div>
+            <div class="col-md-3">
+                <label class="small text-white-50">Nome de Exibição</label>
+                <input type="text" name="p_nome[]" class="form-control form-control-sm glass-input" placeholder="Estagiário">
+            </div>
+            <div class="col-md-3">
+                <label class="small text-white-50">ID do Cargo (Discord)</label>
+                <input type="number" name="p_role[]" class="form-control form-control-sm glass-input">
+            </div>
+            <div class="col-md-1">
+                <label class="small text-white-50">Letra</label>
+                <input type="text" name="p_letra[]" class="form-control form-control-sm glass-input text-center" maxlength="1">
+            </div>
+            <div class="col-md-2">
+                <label class="small text-white-50">Valor/Hora (€)</label>
+                <input type="number" name="p_valor[]" class="form-control form-control-sm glass-input" value="0">
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+                <button type="button" class="btn btn-link text-danger p-0" onclick="removePatente(this)">
+                    <i class="fas fa-trash-alt me-1"></i>Remover
+                </button>
+            </div>
+        </div>
+    </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+}
+
+function removePatente(btn) {
+    if(confirm('Tem a certeza que deseja remover esta patente?')) {
+        btn.closest('.patente-item').remove();
+    }
+}
+</script>
+
+<style>
+.nav-pills .nav-link {
+    color: rgba(255,255,255,0.7);
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+.nav-pills .nav-link:hover {
+    background: rgba(255,255,255,0.05);
+    color: white;
+}
+.nav-pills .nav-link.active {
+    background: linear-gradient(135deg, var(--primary-color), #4facfe) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+.glass-input {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: white;
+    transition: all 0.3s ease;
+}
+.glass-input:focus {
+    background: rgba(255,255,255,0.07);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(var(--primary-rgb), 0.25);
+    color: white;
+}
+.glass-card-inner {
+    background: rgba(0,0,0,0.2);
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+@keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+</style>
+{% endblock %}

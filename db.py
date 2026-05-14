@@ -1,5 +1,6 @@
 import aiosqlite
 import json
+import os
 import time as _time
 
 class Database:
@@ -66,7 +67,114 @@ class Database:
                     except Exception:
                         pass
 
+                # Nova tabela de configurações dinâmicas
+                await cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS configuracoes (
+                        chave TEXT PRIMARY KEY,
+                        valor TEXT
+                    )
+                ''')
+
+                # Nova tabela de Logs
+                await cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp INTEGER,
+                        categoria TEXT,
+                        user_id INTEGER,
+                        mensagem TEXT,
+                        detalhes TEXT,
+                        cor TEXT
+                    )
+                ''')
+
             await conn.commit()
+
+    # =========================================================
+    # SISTEMA DE LOGS
+    # =========================================================
+
+    async def add_log(self, categoria: str, user_id: int, mensagem: str, detalhes=None, cor: str = 'info'):
+        """
+        Adiciona um log ao sistema.
+        Categorias: 'geral', 'erro', 'comando', 'dashboard'
+        """
+        agora = int(_time.time())
+        detalhes_str = json.dumps(detalhes, ensure_ascii=False) if detalhes else None
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('''
+                    INSERT INTO logs (timestamp, categoria, user_id, mensagem, detalhes, cor)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (agora, categoria, user_id, mensagem, detalhes_str, cor))
+            await conn.commit()
+
+    async def get_logs(self, categoria: str = None, limit: int = 100):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                if categoria:
+                    await cursor.execute(
+                        'SELECT id, timestamp, categoria, user_id, mensagem, detalhes, cor '
+                        'FROM logs WHERE categoria = ? ORDER BY id DESC LIMIT ?', (categoria, limit))
+                else:
+                    await cursor.execute(
+                        'SELECT id, timestamp, categoria, user_id, mensagem, detalhes, cor '
+                        'FROM logs ORDER BY id DESC LIMIT ?', (limit,))
+                return await cursor.fetchall()
+
+    # =========================================================
+    # CONFIGURAÇÕES DINÂMICAS
+    # =========================================================
+
+    async def get_config(self, chave: str, default=None):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT valor FROM configuracoes WHERE chave = ?', (chave,))
+                row = await cursor.fetchone()
+                if row:
+                    try:
+                        return json.loads(row[0])
+                    except:
+                        return row[0]
+                return default
+
+    async def set_config(self, chave: str, valor):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                val_str = json.dumps(valor, ensure_ascii=False)
+                await cursor.execute('''
+                    INSERT INTO configuracoes (chave, valor) VALUES (?, ?)
+                    ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor
+                ''', (chave, val_str))
+            await conn.commit()
+
+    async def get_all_configs(self):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT chave, valor FROM configuracoes')
+                rows = await cursor.fetchall()
+                configs = {}
+                for row in rows:
+                    try:
+                        configs[row[0]] = json.loads(row[1])
+                    except:
+                        configs[row[0]] = row[1]
+                return configs
+
+    async def migrate_from_json(self):
+        """Migra as configurações do config.json para a BD se a BD estiver vazia."""
+        configs = await self.get_all_configs()
+        if not configs and os.path.exists('config.json'):
+            try:
+                with open('config.json', 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                for k, v in data.items():
+                    await self.set_config(k, v)
+                print("[DATABASE] Configurações migradas do config.json com sucesso.")
+                return True
+            except Exception as e:
+                print(f"[DATABASE] Erro na migração: {e}")
+        return False
 
     # =========================================================
     # FUNCIONÁRIOS
@@ -458,17 +566,24 @@ class Database:
                 return await cursor.fetchall()
 
     async def get_config_db(self, chave: str):
-        """Lê uma config extra guardada na BD (para salários editáveis pelo dashboard)."""
-        # Por agora configs ficam em config.json; este método é reservado para futuro
-        return None
+        """Lê uma config extra guardada na BD."""
+        return await self.get_config(chave)
 
 
 def get_configs():
-    with open('config.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+    """
+    Tenta ler as configurações. 
+    Nota: Como o bot usa async em quase tudo, o ideal é usar Database.get_all_configs().
+    Este método síncrono é mantido para compatibilidade inicial mas deve ser evitado.
+    """
+    if os.path.exists('config.json'):
+        with open('config.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
 
 
 def save_configs(config: dict):
-    """Guarda o config.json com alterações (ex: salários editados pelo dashboard)."""
-    with open('config.json', 'w', encoding='utf-8') as f:
-        json.dump(config, f, ensure_ascii=False, indent=4)
+    """Guarda o config.json (obsoleto, mantido para evitar quebras imediatas)."""
+    if os.path.exists('config.json'):
+        with open('config.json', 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)

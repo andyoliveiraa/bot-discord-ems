@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-layout">
+  <nav class="sidebar">
+    <div class="logo-container-small">
+      <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+      <h3>EMS Atlas</h3>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
+      <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
+      <li><a href="/admin/pontos-abertos"><i class="fas fa-eye"></i> Pontos Abertos</a></li>
+      <li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>
+      <li><a href="/admin/logs" class="active"><i class="fas fa-list-alt"></i> Logs do Sistema</a></li>
+      {% if session.get('user_id')|string == config.get('owner_id')|string %}
+      <li><a href="/admin/configuracoes"><i class="fas fa-tools"></i> Configurações</a></li>
+      {% endif %}
+      <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+    </ul>
+  </nav>
+
+  <main class="main-content">
+    <header class="dashboard-header">
+      <div>
+        <h2>Logs do <span class="highlight">Sistema</span></h2>
+        <p class="subtitle">Monitorização em tempo real de todas as atividades do bot e painel</p>
+      </div>
+    </header>
+
+    <!-- TABS -->
+    <div class="tabs" style="margin-bottom: 1.5rem;">
+      <button class="tab-btn active" onclick="showLogTab('geral')">Geral</button>
+      <button class="tab-btn" onclick="showLogTab('comando')">Comandos</button>
+      <button class="tab-btn" onclick="showLogTab('erro')">Erros</button>
+      <button class="tab-btn" onclick="showLogTab('dashboard')">Painel</button>
+    </div>
+
+    <!-- LOG CONTENT -->
+    <div class="card log-card">
+      <div class="table-container">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th><i class="fas fa-calendar-alt"></i> Data/Hora</th>
+              <th><i class="fas fa-tag"></i> Categoria</th>
+              <th><i class="fas fa-user"></i> Usuário</th>
+              <th><i class="fas fa-info-circle"></i> Mensagem</th>
+              <th><i class="fas fa-search-plus"></i> Detalhes</th>
+            </tr>
+          </thead>
+          <tbody id="log-body">
+            {% for log in logs %}
+            <tr class="log-row log-cat-{{ log.categoria }} border-{{ log.cor or 'primary' }}">
+              <td style="white-space: nowrap;">
+                <span style="font-family: monospace; font-size: 0.85rem; color: var(--muted);">
+                  {{ log.timestamp | timestamp_semana }} {{ log.timestamp | timestamp_fmt }}
+                </span>
+              </td>
+              <td>
+                <span class="badge badge-{{ log.cor or 'primary' }}" style="text-transform: uppercase; font-size: 0.7rem;">
+                  {{ log.categoria }}
+                </span>
+              </td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <img src="{{ log.user_id | get_avatar }}" class="avatar-table-small" style="width:24px; height:24px; border-radius:50%;" alt="">
+                  <span style="font-size: 0.9rem;">{{ log.user_id }}</span>
+                </div>
+              </td>
+              <td style="max-width: 300px;">
+                <div class="log-msg" title="{{ log.mensagem }}">{{ log.mensagem }}</div>
+              </td>
+              <td>
+                {% if log.detalhes %}
+                <button class="btn-icon" onclick="toggleDetails('det-{{ log.id }}')">
+                  <i class="fas fa-chevron-down"></i>
+                </button>
+                {% else %}
+                <span style="color: var(--muted);">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% if log.detalhes %}
+            <tr id="det-{{ log.id }}" class="log-details-row" style="display:none;">
+              <td colspan="5">
+                <div class="log-details-box">
+                  <pre>{{ log.detalhes | tojson(indent=2) }}</pre>
+                </div>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+  .log-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .avatar-table-small {
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .log-msg {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+  .log-details-box {
+    background: rgba(0,0,0,0.2);
+    padding: 1rem;
+    border-radius: 8px;
+    margin: 0.5rem;
+    font-family: 'Consolas', monospace;
+    font-size: 0.85rem;
+    color: #e0e0e0;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .log-details-box pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .log-details-row td {
+    padding: 0 !important;
+    background: rgba(255,255,255,0.02);
+  }
+  .badge-primary { background: rgba(52, 152, 219, 0.2); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.3); }
+  .badge-info { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); }
+  .badge-warning { background: rgba(241, 194, 50, 0.2); color: #f1c232; border: 1px solid rgba(241, 194, 50, 0.3); }
+  .badge-danger { background: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.3); }
+
+  .border-primary { border-left: 4px solid #3498db !important; }
+  .border-info { border-left: 4px solid #2ecc71 !important; }
+  .border-warning { border-left: 4px solid #f1c232 !important; }
+  .border-danger { border-left: 4px solid #e74c3c !important; }
+
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 500;
+  }
+  .tab-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+  }
+</style>
+
+<script>
+function showLogTab(cat) {
+  // Update buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // Filter rows
+  const rows = document.querySelectorAll('.log-row');
+  rows.forEach(row => {
+    if (cat === 'geral') {
+      row.style.display = '';
+    } else {
+      if (row.classList.contains('log-cat-' + cat)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+        // Close details if they were open
+        const detailsId = row.nextElementSibling?.id;
+        if (detailsId && detailsId.startsWith('det-')) {
+          row.nextElementSibling.style.display = 'none';
+        }
+      }
+    }
+  });
+}
+
+function toggleDetails(id) {
+  const row = document.getElementById(id);
+  const icon = event.currentTarget.querySelector('i');
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
+  } else {
+    row.style.display = 'none';
+    icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+  }
+}
+</script>
+{% endblock %}

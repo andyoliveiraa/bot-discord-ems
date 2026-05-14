@@ -3,12 +3,16 @@ import os
 import asyncio
 import aiohttp
 import secrets
+from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
 from db import Database, get_configs, save_configs
 import datetime
 from pytz import timezone as tz
 
+load_dotenv() # Carrega .env
+
 app = Quart(__name__)
+# Configuração inicial ( fallback para config.json )
 config = get_configs()
 app.secret_key = config.get('secret_key', 'chave_secreta_padrao_muito_segura_123!')
 db = Database('db.sqlite3')
@@ -16,6 +20,10 @@ db = Database('db.sqlite3')
 @app.before_serving
 async def startup():
     await db.setup_db()
+    # Migra se for o primeiro arranque com a nova versão
+    await db.migrate_from_json()
+    # Recarrega config da BD
+    await recarregar_config()
     await db.get_or_criar_semana_activa()
 
 @app.route('/api/track-visit', methods=['POST'])
@@ -74,25 +82,55 @@ async def api_track_visit():
                 )
                 await owner.send(msg)
                 session['visitor_notified'] = True
-                print(f"[TRACK] Notificação com localização enviada para {owner_id}")
+                
+                # Gravar log na base de dados
+                await db.add_log(
+                    categoria='dashboard',
+                    user_id=user_id or 0,
+                    mensagem=f"Acesso ao Dashboard: {user_info}",
+                    detalhes={
+                        'ip': final_ip,
+                        'localizacao': f"{city}, {country}",
+                        'isp': isp,
+                        'dispositivo': device,
+                        'user_agent': user_agent
+                    },
+                    cor='primary'
+                )
+                print(f"[SEGURANÇA] Log de acesso gravado e notificação enviada.")
         except Exception as e:
-            print(f"[DEBUG] Erro ao enviar notificação: {e}")
+            print(f"[SEGURANÇA] Erro ao enviar notificação: {e}")
     
     return jsonify({'ok': True})
 
 def formatar_moeda(valor):
     return f"{valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + " €"
 
-def recarregar_config():
+async def recarregar_config():
     global config
-    config = get_configs()
+    # Carrega da BD
+    db_configs = await db.get_all_configs()
+    if db_configs:
+        config.update(db_configs)
+        print("[DASHBOARD] Configurações recarregadas da BD.")
+    else:
+        # Fallback para config.json se a BD estiver vazia
+        config = get_configs()
+    
     app.secret_key = config.get('secret_key', 'chave_secreta_padrao_muito_segura_123!')
+    
     # Sincroniza config com o módulo ponto
     try:
         import ponto
         ponto.config = config
     except ImportError:
         pass
+    
+    # Sincroniza config com o módulo main (bot)
+    bot = app.config.get('BOT_CLIENT')
+    if bot:
+        import main
+        main.config = config
 
 @app.template_filter('timestamp_fmt')
 def timestamp_fmt(ts):
@@ -139,6 +177,17 @@ def direcao_required(fn):
     async def wrapper(*a, **kw):
         if not session.get('is_direcao'):
             return jsonify({'erro': 'Acesso restrito à Direção'}), 403
+        return await fn(*a, **kw)
+    return wrapper
+
+def owner_required(fn):
+    import functools
+    @functools.wraps(fn)
+    async def wrapper(*a, **kw):
+        user_id = session.get('user_id')
+        if not user_id or str(user_id) != str(config.get('owner_id')):
+            await flash('Acesso restrito ao Proprietário.', 'danger')
+            return redirect(url_for('index'))
         return await fn(*a, **kw)
     return wrapper
 
@@ -373,6 +422,7 @@ async def api_editar_ponto(ponto_id):
         new_dur = duration_actual + delta
         await db.update_ponto_duration(ponto_id, new_dur)
         await db.add_time(user_id, delta)
+        await db.add_log('dashboard', session['user_id'], f"Adicionou {h}h {m}m ao ponto #{ponto_id}", {'user_ponto': user_id}, cor='info')
         return jsonify({'ok': True, 'nova_duration': new_dur})
 
     elif action == 'remove_time':
@@ -383,12 +433,14 @@ async def api_editar_ponto(ponto_id):
         removed = duration_actual - new_dur
         await db.update_ponto_duration(ponto_id, new_dur)
         await db.del_time(user_id, removed)
+        await db.add_log('dashboard', session['user_id'], f"Removeu {h}h {m}m do ponto #{ponto_id}", {'user_ponto': user_id}, cor='warning')
         return jsonify({'ok': True, 'nova_duration': new_dur})
 
     elif action == 'cancel':
         staff_id = session['user_id']
         await db.del_time(user_id, duration_actual)
         await db.cancel_ponto(ponto_id, staff_id)
+        await db.add_log('dashboard', staff_id, f"Cancelou o ponto #{ponto_id}", {'user_ponto': user_id}, cor='danger')
         return jsonify({'ok': True})
 
     elif action == 'edit_times':
@@ -425,7 +477,8 @@ async def api_editar_ponto(ponto_id):
                 await db.add_time(user_id, diff)
             elif diff < 0:
                 await db.del_time(user_id, abs(diff))
-                    
+            
+            await db.add_log('dashboard', session['user_id'], f"Alterou horários do ponto #{ponto_id}", {'hr_in': str_in, 'hr_out': str_out}, cor='info')
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'erro': f'Erro ao processar horários: {str(e)}'}), 400
@@ -553,9 +606,6 @@ async def api_active_ponto_action(target_user_id, action):
             
             import json
             await db.create_registry(target_user_id, horario_inicio, horario_atual, staff_id, 0, json.dumps(estado["pausas"]))
-            await db.cancel_ponto(target_user_id, staff_id) # O método cancel_ponto espera ponto_id, mas aqui não temos ID de registro ainda. 
-            # Na verdade, create_registry já inseriu. Mas db.cancel_ponto usa UPDATE pontos.
-            # Vamos simplificar: create_registry com staff_id (o 4º param é staff_finished/contabilizado_por) e duration 0 já é cancelado.
             
             if client:
                 try:
@@ -644,6 +694,7 @@ async def admin_definicoes():
         func_list=func_list, 
         semanas=semanas_info, 
         cargos=cargos,
+        config=config,
         is_admin=session.get('is_admin'),
         is_direcao=session.get('is_direcao'),
         ordenado_cargos=sorted(cargos.items(), key=lambda x: x[1].get('valor_hora', 0), reverse=True))
@@ -683,6 +734,7 @@ async def api_admin_func_action(uid):
                     if role and role in member.roles:
                         try: await member.remove_roles(role)
                         except: pass
+        await db.add_log('dashboard', session['user_id'], f"Despediu funcionário <@{uid}>", cor='danger')
         return jsonify({'ok': True})
 
     elif action in ['promote', 'demote']:
@@ -696,7 +748,6 @@ async def api_admin_func_action(uid):
         if not func: return jsonify({'erro': 'Funcionário não encontrado'}), 404
         
         # Atualizar no DB
-        # Note: add_funcionario uses ON CONFLICT UPDATE, so it works for updates too
         await db.add_funcionario(uid, new_patente, func[1], func[2])
         
         if member:
@@ -716,6 +767,7 @@ async def api_admin_func_action(uid):
                 try: await member.add_roles(new_role)
                 except: pass
                 
+        await db.add_log('dashboard', session['user_id'], f"Alterou patente de <@{uid}> para {new_patente}", {'acao': action}, cor='info')
         return jsonify({'ok': True})
 
     return jsonify({'erro': 'Acção desconhecida'}), 400
@@ -742,6 +794,7 @@ async def api_resetar_senha(uid):
                 enviado = True
         except Exception:
             pass
+    await db.add_log('dashboard', session['user_id'], f"Resetou senha de <@{uid}>", cor='warning')
     return jsonify({'ok': True, 'link': link, 'dm_enviada': enviado})
 
 @app.route('/api/funcionario/<int:uid>/promover', methods=['POST'])
@@ -750,7 +803,6 @@ async def api_promover(uid):
         return jsonify({'erro': 'Sem permissão'}), 403
     form = await request.form
     nova_patente = form.get('patente')
-    motivo = form.get('motivo', 'Dashboard')
     if not nova_patente or nova_patente not in config.get('cargos_patentes', {}):
         return jsonify({'erro': 'Patente inválida'}), 400
 
@@ -838,34 +890,13 @@ async def api_despedir(uid):
 
     return jsonify({'ok': True})
 
-@app.route('/api/config/salario', methods=['POST'])
-async def api_update_salario():
-    if not session.get('is_admin'):
-        return jsonify({'erro': 'Sem permissão'}), 403
-    form = await request.form
-    patente_id = form.get('patente_id')
-    novo_valor = form.get('valor_hora')
-    if not patente_id or not novo_valor:
-        return jsonify({'erro': 'Dados inválidos'}), 400
-    try:
-        novo_valor = int(novo_valor)
-    except ValueError:
-        return jsonify({'erro': 'Valor inválido'}), 400
-
-    cfg = get_configs()
-    if patente_id not in cfg.get('cargos_patentes', {}):
-        return jsonify({'erro': 'Patente não encontrada'}), 404
-    cfg['cargos_patentes'][patente_id]['valor_hora'] = novo_valor
-    await asyncio.to_thread(save_configs, cfg)
-    recarregar_config()
-    return jsonify({'ok': True})
-
 @app.route('/api/pagamento/<int:semana_id>/<int:uid>/marcar-pago', methods=['POST'])
 async def api_marcar_pago(semana_id, uid):
     if not session.get('is_admin'):
         return jsonify({'erro': 'Sem permissão'}), 403
     staff_id = session['user_id']
     await db.marcar_pago(semana_id, uid, staff_id)
+    await db.add_log('dashboard', staff_id, f"Marcou pagamento como PAGO para <@{uid}>", {'semana': semana_id}, cor='success')
 
     bot = app.config.get('BOT_CLIENT')
     if bot:
@@ -887,5 +918,110 @@ async def api_encerrar_semana():
     resultado = await db.encerrar_semana(config.get('cargos_patentes', {}))
     await db.get_or_criar_semana_activa()
     await db.reset_all_times()
+    await db.add_log('dashboard', session['user_id'], f"Encerrou a semana #{resultado['semana_id']}", cor='danger')
     return jsonify({'ok': True, 'semana_id': resultado['semana_id'],
                     'pagamentos': len(resultado['pagamentos'])})
+
+
+# ── Logs do Sistema ──────────────────────────────────────────────────────────
+
+@app.route('/admin/logs')
+@login_required
+@direcao_required
+async def admin_logs():
+    import json
+    logs_raw = await db.get_logs(limit=500)
+    
+    logs_fmt = []
+    for log in logs_raw:
+        lid, ts, cat, uid, msg, det, cor = log
+        try:
+            detalhes = json.loads(det) if det else None
+        except:
+            detalhes = det
+
+        logs_fmt.append({
+            'id': lid,
+            'timestamp': ts,
+            'categoria': cat,
+            'user_id': uid,
+            'mensagem': msg,
+            'detalhes': detalhes,
+            'cor': cor
+        })
+
+    return await render_template('admin_logs.html', logs=logs_fmt)
+
+
+# ── Configurações (Owner Only) ──────────────────────────────────────────────────
+
+@app.route('/admin/configuracoes')
+@login_required
+@owner_required
+async def admin_configuracoes():
+    return await render_template('admin_configuracoes.html', configs=config)
+
+@app.route('/admin/configuracoes/save', methods=['POST'])
+@login_required
+@owner_required
+async def admin_configuracoes_save():
+    form = await request.form
+    
+    # 1. Geral
+    geral_keys = [
+        'server_name', 'nome_corp', 'log_channel_id', 'log_contratacoes_id', 
+        'staff_role_id', 'cargo_equipa_id', 'timezone', 'owner_id'
+    ]
+    for k in geral_keys:
+        val = form.get(k)
+        if val:
+            # Tenta converter IDs para int
+            if '_id' in k or 'role' in k:
+                try: val = int(val)
+                except: pass
+            await db.set_config(k, val)
+
+    # 2. Patentes
+    p_slugs = form.getlist('p_slug[]')
+    p_nomes = form.getlist('p_nome[]')
+    p_roles = form.getlist('p_role[]')
+    p_letras = form.getlist('p_letra[]')
+    p_valores = form.getlist('p_valor[]')
+
+    novas_patentes = {}
+    for i in range(len(p_slugs)):
+        slug = p_slugs[i].strip()
+        if not slug: continue
+        try:
+            novas_patentes[slug] = {
+                'nome': p_nomes[i],
+                'id': int(p_roles[i]) if p_roles[i] else 0,
+                'letra': p_letras[i].upper() if p_letras[i] else '',
+                'valor_hora': float(p_valores[i]) if p_valores[i] else 0
+            }
+        except Exception as e:
+            print(f"[DEBUG] Erro ao processar patente {slug}: {e}")
+
+    if novas_patentes:
+        await db.set_config('cargos_patentes', novas_patentes)
+
+    # 3. Rich Presence
+    rp_interval = form.get('rp_interval')
+    if rp_interval:
+        try: await db.set_config('rp_interval', int(rp_interval))
+        except: pass
+    
+    rp_statuses = form.get('rp_statuses', '').split('\n')
+    rp_statuses = [s.strip() for s in rp_statuses if s.strip()]
+    if rp_statuses:
+        await db.set_config('rp_statuses', rp_statuses)
+
+    # Recarregar tudo
+    await recarregar_config()
+    await db.add_log('dashboard', session['user_id'], "Alterou as configurações globais do sistema", cor='warning')
+    await flash('Configurações guardadas com sucesso!', 'success')
+    return redirect(url_for('admin_configuracoes'))
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)

@@ -1122,6 +1122,7 @@ class PicaPonto(commands.Cog):
             
             msg = await ctx.channel.send(embed=embed, view=finalizarPonto())
             estado["msg_id"] = msg.id
+            save_active_pontos()
             return await ctx.respond("✅ Seu painel de pica-ponto foi atualizado neste canal!", ephemeral=True)
             
         horario = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())

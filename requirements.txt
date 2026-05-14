@@ -5,3 +5,4 @@ aiohttp
 fpdf2
 quart
 werkzeug
+python-dotenv
