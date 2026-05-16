@@ -86,6 +86,13 @@
     </main>
 </div>
 
+<script>
+    // Atualiza a página automaticamente a cada 60 segundos
+    // para garantir que novos pontos fechados ou pagamentos são refletidos em tempo real.
+    setTimeout(function() {
+        window.location.reload();
+    }, 60000);
+</script>
 <style>
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
