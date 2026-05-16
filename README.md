@@ -1,6 +1,6 @@
 # 🤖 Pica-Ponto Pro: Gestão de RH e Dashboard Web (FiveM/MTA)
 
-Sistema profissional de gestão de funcionários e registo de horas (ponto) para comunidades de roleplay, agora com **Dashboard Web Integrado**, sistema de **Arquivamento Semanal** e **Controlo de Pagamentos**.
+Sistema profissional de gestão de funcionários e registo de horas (ponto) para comunidades de roleplay, agora com **Dashboard Web Integrado**, sistema de **Arquivamento Semanal**, **Controlo de Pagamentos** e **Planilha Pública de Produtividade**.
 
 ---
 
@@ -13,10 +13,11 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
 - **Edição via Dashboard:** Administradores podem adicionar/remover tempo ou cancelar pontos diretamente pelo site.
 
 ### 📊 Dashboard Web (ems.discloud.app)
+- **Planilha Pública:** Link permanente (`/planilha`) sem necessidade de login, que exibe as horas semanais atualizadas em tempo real e a estimativa de pagamentos de toda a equipa.
 - **Sincronização de Perfil:** Fotos de perfil sincronizadas em tempo real com o Discord.
 - **Visão Geral:** Gráfico de horas semanais, ranking Top 10 e estimativa de pagamento.
 - **Meus Pontos:** Histórico detalhado por dia com visualização de pausas.
-- **Painel Administrativo:** Gestão completa de funcionários e configurações.
+- **Rastreamento de IPs (Segurança):** O sistema regista o IP real e o dispositivo de quem acede (mesmo atrás do Cloudflare) e notifica o dono no Discord por segurança.
 
 ### 👥 Sistema de RH Integrado
 - **Contratação/Demissão:** Automatização de cargos, callsigns (indicativos) e apelidos no Discord.
@@ -28,62 +29,58 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
 - **Arquivamento Semanal:** Encerra a semana gerando um PDF completo e arquiva os dados na BD.
 - **Controlo de Pagamentos:** Marca funcionários como "Pagos" no dashboard.
 - **Lembretes Diários:** O bot notifica automaticamente os staffs sobre pagamentos pendentes todas as manhãs.
-- **Relatórios PDF:** Geração de folhas de pagamento profissionais com cálculos por patente.
+- **Relatórios PDF:** Geração de folhas de pagamento profissionais com cálculos dinâmicos por patente.
 
 ---
 
-## 🛠️ Configuração (`config.json`)
+## ⚙️ Gestão no Dashboard Admin
 
-| Campo | Descrição |
-|---|---|
-| `server_name` | Nome da sua cidade/comunidade. |
-| `owner_id` | ID do Discord do dono (recebe backups e logs críticos). |
-| `log_channel_id` | Canal principal de logs de pontos e erros. |
-| `log_contratacoes_id` | Canal exclusivo para logs de RH (Contratar/Promover). |
-| `staff_role_id` | Cargo que tem acesso aos comandos administrativos e ao Dashboard Admin. |
-| `ponto_role_id` | Cargo necessário para bater o ponto. |
-| `cargos_patentes` | Configuração de salários, cargos e letras de indicativo. |
+Aceda ao **Painel de Administração** (`/admin/definicoes`) e de **Configuração** (`/admin/configuracoes`) no dashboard para:
+- **Gestão de Patentes / Salários:** Adicionar, editar ou remover patentes, definir os seus identificadores do Discord (Role IDs) e os valores recebidos à hora dinamicamente e sem tocar no código fonte.
+- **Resetar Senhas:** De funcionários em caso de esquecimento.
+- **Definições Gerais:** Editar Nome do Servidor, Links de Logos, Fuso Horário e Rich Presence do Discord diretamente pela interface.
+- **Histórico Financeiro:** Visualizar e gerir o estado dos pagamentos de semanas passadas.
 
 ---
 
-## 💻 Instalação
+## 🛠️ Instalação (Inicial)
 
+O sistema baseia-se num ficheiro `config.json` e num ficheiro de base de dados SQLite (`db.sqlite3`).
 1. **Dependências:** `pip install -r requirements.txt`
-2. **Configuração:** Preencha o `config.json` com os seus IDs e Token.
-3. **Execução:** `python main.py` (O sistema possui um **Watcher** integrado que reinicia o bot em caso de erro).
+2. **Configuração Inicial:** Preencha as configurações cruciais (Discord Token) no `config.json`.
+3. **Execução:** `python main.py` (O sistema possui um **Watcher** integrado que reinicia o bot em caso de erro fatal `This event loop is already running`).
+4. **Finalizar a Configuração:** Use a página do site `/admin/configuracoes` para personalizar o resto do bot (Cargos, Canais, etc).
 
 ---
 
-## 📝 Comandos Staff (Discord)
+## 📝 Comandos Discord
 
-- `/contratar @user [patente] [nome] [motivo]` — Registra um novo funcionário e gera senha web.
-- `/promover @user [nova_patente] [motivo]` — Altera a patente e o callsign.
-- `/despedir @user [motivo]` — Remove o funcionário e retira os cargos.
+### Comandos de Utilizador
+- `/ponto` — Abre o painel individual para Iniciar, Pausar ou Terminar a jornada de trabalho.
+- `/meuponto` — Exibe estatísticas rápidas sobre as horas já acumuladas na semana corrente.
+- `/reset_password` — Redefine a sua própria senha de acesso à Web Dashboard.
+
+### Comandos Staff
+- `/contratar @user [patente] [nome] [motivo]` — Registra um novo funcionário, cria callsign e gera senha web.
+- `/promover @user [nova_patente] [motivo]` — Altera a patente, o callsign e os cargos Discord associados.
+- `/despedir @user [motivo]` — Remove o funcionário da corporação e retira os seus cargos.
 - `/addtempo @user [horas] [minutos] [motivo]` — Adiciona tempo manual a um funcionário.
 - `/deltempo @user [horas] [minutos] [motivo]` — Remove tempo manual de um funcionário.
-- `/pontosreg @user` — Consulta o histórico detalhado de registros de um usuário.
-- `/resetarsemana` — Gera PDF, faz backup e arquiva a semana (cria pagamentos).
-- `/semana` — Apenas visualiza o relatório atual sem encerrar.
-- `/ranking` — Top 10 de horas da semana.
-- `/autocorrecao` — Sincroniza callsigns e nomes de todos os membros conforme as regras de patente.
-- `/resetarsenha @user` — Gera um novo link de redefinição de senha para o Dashboard.
-
----
-
-## ⚙️ Dashboard Admin
-
-Aceda a `/admin/definicoes` no dashboard para:
-- Editar o **Valor/Hora** de cada patente em tempo real.
-- Resetar senhas de funcionários.
-- Visualizar e gerir o histórico de pagamentos de semanas passadas.
+- `/pontosreg @user` — Consulta o histórico detalhado de registos de um utilizador nesta semana.
+- `/resetarsemana` — Gera PDF, faz backup e encerra a semana (gera dívidas a pagar no dashboard).
+- `/semana` — Apenas visualiza o relatório PDF atual de pagamentos sem encerrar a semana ativa.
+- `/ranking` — Top 10 de horas trabalhadas na semana atual.
+- `/autocorrecao` — Força a auto-correção de apelidos (Callsigns) e nomes de todos os membros do Discord conforme os registos da base de dados.
+- `/resetarsenha @user` — Gera um novo link de redefinição de senha para o Dashboard em nome da Direção.
+- `/resetar_todos` — Painel interativo para limpar e apagar dados gerais (usar com cuidado).
 
 ---
 
 ## 🛡️ Segurança e Estabilidade
-- **Base de Dados:** SQLite com `aiosqlite` para operações assíncronas.
+- **Base de Dados:** SQLite com `aiosqlite` para operações assíncronas sem bloquear eventos do Discord.
 - **Senhas:** Hashing seguro com `Werkzeug`.
-- **Watcher:** Monitorização de processo para 99.9% de uptime.
-- **Backups:** Diários às 07:00 enviados para o dono e canal de logs.
+- **IP Tracking:** Rastreamento exato de endereços via APIs externas compatíveis com Cloudflare (`meuip.com`), notificando o Dono em DMs para total monitorização do acesso às configs.
+- **Backups:** Envio automático da Base de Dados às 07:00 para as DMs do Dono e canal de Logs.
 
 ---
-**Desenvolvido por andyydias**
+**Desenvolvido e Otimizado por andyydias**
