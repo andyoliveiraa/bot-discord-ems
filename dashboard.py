@@ -643,6 +643,57 @@ async def api_active_ponto_action(target_user_id, action):
     
     return jsonify({'erro': 'Acção inválida'}), 400
 
+# ── Planilha Pública ─────────────────────────────────────────────────────────
+
+@app.route('/planilha')
+async def planilha_publica():
+    funcionarios = await db.get_all_funcionarios()
+    cargos = config.get('cargos_patentes', {})
+    
+    impagos_raw = await db.get_semanas_com_impagos()
+    impagos_por_user = {}
+    for imp in impagos_raw:
+        uid = imp[1]
+        valor = imp[2]
+        impagos_por_user[uid] = impagos_por_user.get(uid, 0) + valor
+
+    planilha_list = []
+    for f in funcionarios:
+        uid, pat_id, callsign, nome = f
+        
+        tempo = await db.get_user_time(uid)
+        tempo_seg = tempo[1] if tempo else 0
+        h = int(tempo_seg // 3600)
+        m = int((tempo_seg % 3600) // 60)
+        
+        patente_info = cargos.get(pat_id, {})
+        valor_hora = patente_info.get('valor_hora', 0)
+        
+        mins = h * 60 + m
+        estimativa = (mins / 60) * valor_hora
+        pendente = impagos_por_user.get(uid, 0)
+        
+        # Filtra se quisermos (neste caso, mostramos todos)
+        planilha_list.append({
+            'user_id': uid,
+            'callsign': callsign,
+            'nome': nome,
+            'patente_nome': patente_info.get('nome', pat_id),
+            'patente_id': pat_id,
+            'horas': h,
+            'minutos': m,
+            'estimativa': estimativa,
+            'pendente': pendente
+        })
+    
+    # Sort by cargo valor (maior para menor) then by callsign
+    planilha_list.sort(key=lambda x: (
+        -cargos.get(x['patente_id'], {}).get('valor_hora', 0),
+        x['callsign']
+    ))
+    
+    return await render_template('planilha.html', planilha=planilha_list, config=config, formatar_moeda=formatar_moeda)
+
 # ── admin ─────────────────────────────────────────────────────────────────────
 
 @app.route('/admin')

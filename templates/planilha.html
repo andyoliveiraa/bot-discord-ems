@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Removemos o background default do body para um visual mais limpo nesta página ou usamos o main-content cheio -->
+<div class="dashboard-layout" style="display: flex; width: 100%; justify-content: center; padding: 2rem;">
+    <main class="main-content" style="max-width: 1400px; width: 100%; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); padding: 40px; margin: 0 auto; height: auto; flex: none;">
+        
+        <header class="dashboard-header" style="justify-content: center; text-align: center; margin-bottom: 40px; flex-direction: column;">
+            <h2 style="font-size: 2.5rem;"><i class="fas fa-file-invoice-dollar highlight me-2"></i> Planilha de <span class="highlight">Produtividade</span></h2>
+            <p class="subtitle" style="font-size: 1.1rem; margin-top: 10px;">Acompanhamento público de horas semanais e pagamentos da equipa EMS.</p>
+        </header>
+
+        <div class="card" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+            <div class="table-container">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px; text-align: center;"><i class="fas fa-image"></i></th>
+                            <th><i class="fas fa-id-badge"></i> Callsign</th>
+                            <th><i class="fas fa-user"></i> Nome</th>
+                            <th><i class="fas fa-briefcase"></i> Patente</th>
+                            <th><i class="fas fa-clock"></i> Horas na Semana</th>
+                            <th><i class="fas fa-hand-holding-usd"></i> Estimativa a Receber</th>
+                            <th><i class="fas fa-money-check-alt text-warning"></i> Pagamentos Pendentes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in planilha %}
+                        <tr style="animation: fadeIn 0.4s ease-out backwards; animation-delay: {{ loop.index0 * 0.05 }}s;">
+                            <td style="text-align: center;">
+                                <img src="{{ f.user_id | get_avatar }}" class="avatar-table" style="width: 2rem; height: 2rem;" alt="Avatar">
+                            </td>
+                            <td><span class="badge">{{ f.callsign }}</span></td>
+                            <td style="font-weight: 600;">{{ f.nome }}</td>
+                            <td style="color: var(--text-secondary);">{{ f.patente_nome }}</td>
+                            <td>
+                                <span class="chrono" style="font-size: 1.05rem;">{{ f.horas }}h {{ "%02d"|format(f.minutos) }}m</span>
+                            </td>
+                            <td>
+                                {% if f.estimativa > 0 %}
+                                    <span style="color: var(--success); font-weight: 700; font-size: 1.1rem;">
+                                        {{ formatar_moeda(f.estimativa) }}
+                                    </span>
+                                {% else %}
+                                    <span style="color: var(--text-secondary); font-weight: 500;">
+                                        {{ formatar_moeda(f.estimativa) }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if f.pendente > 0 %}
+                                    <span class="badge badge-warning" style="font-size: 1rem; padding: 0.4rem 0.8rem;">
+                                        <i class="fas fa-exclamation-circle" style="margin-right: 5px;"></i> {{ formatar_moeda(f.pendente) }}
+                                    </span>
+                                {% else %}
+                                    <span style="color: var(--text-secondary); font-size: 0.95rem;">
+                                        <i class="fas fa-check-circle" style="color: var(--success); margin-right: 5px;"></i> Tudo Pago
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                                <i class="fas fa-folder-open" style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--accent-blue);"></i><br>
+                                Nenhum funcionário encontrado na base de dados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="margin-top: 2rem; text-align: center;">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 800px; margin: 0 auto; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border: 1px solid var(--glass-border);">
+                    <i class="fas fa-info-circle highlight" style="margin-right: 5px;"></i> 
+                    A <strong>Estimativa a Receber</strong> é referente apenas à semana em curso. Os <strong>Pagamentos Pendentes</strong> referem-se a semanas já encerradas que aguardam pagamento pela direção da corporação.
+                </p>
+                <div style="margin-top: 1.5rem;">
+                    <a href="/" class="btn-secondary" style="display: inline-block; width: auto; padding: 0.6rem 1.5rem; text-decoration: none;">
+                        <i class="fas fa-arrow-left" style="margin-right: 5px;"></i> Voltar à Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
