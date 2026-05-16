@@ -958,6 +958,41 @@ async def admin_logs():
 
 # ── Configurações (Owner Only) ──────────────────────────────────────────────────
 
+@app.route('/api/admin/patentes/save', methods=['POST'])
+@login_required
+async def api_admin_patentes_save():
+    if not session.get('is_admin') and not session.get('is_direcao'):
+        return jsonify({'erro': 'Acesso negado. Apenas Staff ou Direção.'}), 403
+
+    form = await request.form
+    p_slugs = form.getlist('p_slug[]')
+    p_nomes = form.getlist('p_nome[]')
+    p_roles = form.getlist('p_role[]')
+    p_letras = form.getlist('p_letra[]')
+    p_valores = form.getlist('p_valor[]')
+
+    novas_patentes = {}
+    for i in range(len(p_slugs)):
+        slug = p_slugs[i].strip()
+        if not slug: continue
+        try:
+            novas_patentes[slug] = {
+                'nome': p_nomes[i],
+                'id': int(p_roles[i]) if p_roles[i] else 0,
+                'letra': p_letras[i].upper() if p_letras[i] else '',
+                'valor_hora': float(p_valores[i]) if p_valores[i] else 0
+            }
+        except Exception as e:
+            print(f"[DEBUG] Erro ao processar patente {slug}: {e}")
+
+    if novas_patentes:
+        await db.set_config('cargos_patentes', novas_patentes)
+        await recarregar_config()
+        await db.add_log('dashboard', session['user_id'], "Alterou a configuração de Patentes/Salários no painel", cor='info')
+        await flash('Patentes/Salários guardados com sucesso!', 'success')
+        
+    return redirect(url_for('admin_definicoes'))
+
 @app.route('/admin/configuracoes')
 @login_required
 @owner_required

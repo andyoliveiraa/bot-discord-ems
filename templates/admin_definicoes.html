@@ -29,7 +29,7 @@
     <!-- TABS -->
     <div class="tabs">
       <button class="tab-btn active" onclick="showTab('funcionarios')">Funcionários</button>
-      <button class="tab-btn" onclick="showTab('salarios')">Salários</button>
+      <button class="tab-btn" onclick="showTab('salarios')">Patentes / Salários</button>
       <button class="tab-btn" onclick="showTab('semanas')">Semanas</button>
     </div>
 
@@ -76,30 +76,46 @@
     <!-- TAB: SALÁRIOS -->
     <div id="tab-salarios" class="tab-content">
       <div class="card">
-        <h3 style="margin-bottom:1rem;"><i class="fas fa-euro-sign highlight"></i> Salário por Patente (€/hora)</h3>
-        <div class="table-container">
-          <table class="modern-table">
-            <thead>
-              <tr><th><i class="fas fa-briefcase"></i> Patente</th><th><i class="fas fa-coins"></i> Valor/Hora Actual</th><th><i class="fas fa-edit"></i> Novo Valor</th><th></th></tr>
-            </thead>
-            <tbody>
-              {% for pat_id, pat in cargos.items() %}
-              <tr>
-                <td>{{ pat.nome }}</td>
-                <td id="val-{{ pat_id }}">{{ pat.valor_hora }}</td>
-                <td>
-                  <input type="number" id="inp-{{ pat_id }}" class="form-input" value="{{ pat.valor_hora }}"
-                         style="width:140px;padding:.35rem .6rem;">
-                </td>
-                <td>
-                  <button class="btn-primary" style="padding:.35rem .8rem;font-size:.85rem;"
-                          onclick="updateSalario('{{ pat_id }}')"><i class="fas fa-save"></i> Guardar</button>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <h3><i class="fas fa-id-badge highlight"></i> Gestão de Patentes e Salários</h3>
+          <button class="btn-primary" onclick="addPatente()"><i class="fas fa-plus"></i> Nova Patente</button>
         </div>
+        <form id="form-patentes" action="/api/admin/patentes/save" method="POST">
+          <div id="patentes-list">
+            {% for key, val in cargos.items() %}
+            <div class="patente-card" style="background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid var(--accent-blue); border: 1px solid rgba(255,255,255,0.05);">
+              <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 120px;">
+                  <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">ID (slug)</label>
+                  <input type="text" name="p_slug[]" class="form-input" value="{{ key }}" required style="width: 100%;">
+                </div>
+                <div style="flex: 1.5; min-width: 150px;">
+                  <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Nome de Exibição</label>
+                  <input type="text" name="p_nome[]" class="form-input" value="{{ val.get('nome', '') }}" required style="width: 100%;">
+                </div>
+                <div style="flex: 1.5; min-width: 150px;">
+                  <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Role ID (Discord)</label>
+                  <input type="number" name="p_role[]" class="form-input" value="{{ val.get('id', '') }}" required style="width: 100%;">
+                </div>
+                <div style="width: 60px;">
+                  <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Letra</label>
+                  <input type="text" name="p_letra[]" class="form-input text-center" value="{{ val.get('letra', '') }}" maxlength="1" style="width: 100%;">
+                </div>
+                <div style="flex: 1; min-width: 120px;">
+                  <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Valor/Hora (€)</label>
+                  <input type="number" name="p_valor[]" class="form-input" value="{{ val.get('valor_hora', 0) }}" required style="width: 100%;">
+                </div>
+                <div style="display: flex; align-items: flex-end;">
+                  <button type="button" class="btn-danger" style="padding: 0.5rem 1rem;" onclick="this.closest('.patente-card').remove()"><i class="fas fa-trash"></i></button>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div style="margin-top: 1rem; text-align: right;">
+            <button type="submit" class="btn-primary" style="padding: 0.6rem 2rem;"><i class="fas fa-save"></i> Guardar Alterações</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -250,15 +266,37 @@ async function despedirFunc(uid) {
     else alert('Erro: ' + data.erro);
 }
 
-async function updateSalario(patId) {
-  var valor = document.getElementById('inp-' + patId).value;
-  var fd = new FormData();
-  fd.append('patente_id', patId);
-  fd.append('valor_hora', valor);
-  var res = await fetch('/api/config/salario', {method: 'POST', body: fd});
-  var data = await res.json();
-  if (data.ok) { document.getElementById('val-' + patId).textContent = valor; alert('Salário actualizado!'); }
-  else { alert('Erro: ' + data.erro); }
+function addPatente() {
+    const html = `
+    <div class="patente-card" style="background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid var(--accent-blue); border: 1px solid rgba(255,255,255,0.05); animation: fadeIn 0.3s;">
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 120px;">
+          <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">ID (slug)</label>
+          <input type="text" name="p_slug[]" class="form-input" required style="width: 100%;">
+        </div>
+        <div style="flex: 1.5; min-width: 150px;">
+          <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Nome de Exibição</label>
+          <input type="text" name="p_nome[]" class="form-input" required style="width: 100%;">
+        </div>
+        <div style="flex: 1.5; min-width: 150px;">
+          <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Role ID (Discord)</label>
+          <input type="number" name="p_role[]" class="form-input" required style="width: 100%;">
+        </div>
+        <div style="width: 60px;">
+          <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Letra</label>
+          <input type="text" name="p_letra[]" class="form-input text-center" maxlength="1" style="width: 100%;">
+        </div>
+        <div style="flex: 1; min-width: 120px;">
+          <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; display: block;">Valor/Hora (€)</label>
+          <input type="number" name="p_valor[]" class="form-input" value="0" required style="width: 100%;">
+        </div>
+        <div style="display: flex; align-items: flex-end;">
+          <button type="button" class="btn-danger" style="padding: 0.5rem 1rem;" onclick="this.closest('.patente-card').remove()"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+    </div>
+    `;
+    document.getElementById('patentes-list').insertAdjacentHTML('beforeend', html);
 }
 
 async function marcarPago(semanaId, uid) {
