@@ -394,7 +394,9 @@ async def meus_pontos():
         tm = int((dados['total_seg'] % 3600) // 60)
         dias_formatados.append({'dia': dia, 'total_h': th, 'total_m': tm, 'registros': dados['registros']})
 
-    patente_info = config.get('cargos_patentes', {}).get(func[0] if func else '', {})
+    from db import get_configs
+    config_atual = get_configs()
+    patente_info = config_atual.get('cargos_patentes', {}).get(func[0] if func else '', {})
     valor_hora = patente_info.get('valor_hora', 0) if patente_info else 0
 
     return await render_template('meus_pontos.html',
@@ -648,7 +650,9 @@ async def api_active_ponto_action(target_user_id, action):
 @app.route('/planilha')
 async def planilha_publica():
     funcionarios = await db.get_all_funcionarios()
-    cargos = config.get('cargos_patentes', {})
+    from db import get_configs
+    config_atual = get_configs()
+    cargos = config_atual.get('cargos_patentes', {})
     
     impagos_raw = await db.get_semanas_com_impagos()
     impagos_por_user = {}
@@ -706,9 +710,11 @@ async def admin():
 async def admin_definicoes():
     if not session.get('is_admin'):
         return redirect(url_for('login'))
+    from db import get_configs
+    config_atual = get_configs()
     funcionarios = await db.get_all_funcionarios()
     semanas = await db.get_todas_semanas()
-    cargos = config.get('cargos_patentes', {})
+    cargos = config_atual.get('cargos_patentes', {})
 
     func_list = []
     for f in funcionarios:
@@ -1039,6 +1045,13 @@ async def api_admin_patentes_save():
     if novas_patentes:
         await db.set_config('cargos_patentes', novas_patentes)
         await recarregar_config()
+        
+        # Atualiza o config.json para manter sincronia com o bot e as visualizações dinâmicas
+        from db import get_configs, save_configs
+        current_cfg = get_configs()
+        current_cfg['cargos_patentes'] = novas_patentes
+        save_configs(current_cfg)
+        
         await db.add_log('dashboard', session['user_id'], "Alterou a configuração de Patentes/Salários no painel", cor='info')
         await flash('Patentes/Salários guardados com sucesso!', 'success')
         
