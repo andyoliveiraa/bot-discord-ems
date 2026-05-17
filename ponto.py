@@ -703,7 +703,116 @@ class PicaPonto(commands.Cog):
         embed = discord.Embed(title="✅ Funcionário Promovido", description=f"O funcionário {usuario.mention} teve a sua patente alterada!\n\n**Patente Antiga:** {patente_antiga_info['nome'] if patente_antiga_info else 'Desconhecida'}\n**Nova Patente:** {nova_patente_info['nome']}\n**Novo Callsign:** `{novo_callsign}`\n**Motivo:** {motivo}", color=discord.Colour.green())
         await ctx.followup.send(embed=embed)
 
-
+    @commands.slash_command(name="editar_funcionario", description='[ADM] Edita manualmente o callsign, nome e/ou cargo de um funcionário', contexts={discord.InteractionContextType.guild})
+    @commands.has_any_role(config['staff_role_id'])
+    async def editar_funcionario(self, ctx: discord.ApplicationContext,
+                       usuario: Option(discord.Member, 'Selecione o funcionário', required=True),
+                       novo_callsign: Option(str, 'Digite o novo callsign (ex: W-01) - Deixe em branco para não alterar', required=False, default=None),
+                       novo_nome: Option(str, 'Digite o novo nome - Deixe em branco para não alterar', required=False, default=None),
+                       novo_cargo: Option(str, 'Selecione o novo cargo - Deixe em branco para não alterar', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=False, default=None),
+                       motivo: Option(str, 'Motivo da alteração manual', required=True)):
+        
+        await ctx.defer()
+        
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.followup.send("❌ Este usuário não está registrado como funcionário.")
+            
+        patente_antiga_key = func[0]
+        callsign_antigo = func[1]
+        nome_antigo = func[2]
+        
+        if not novo_callsign and not novo_nome and not novo_cargo:
+            return await ctx.followup.send("❌ Tens de fornecer pelo menos um campo para alterar (Callsign, Nome ou Cargo).")
+            
+        if novo_callsign:
+            # Verificar se o novo callsign já está em uso por outro funcionário
+            funcionarios_db = await db.get_all_funcionarios()
+            taken = any(f[2].upper() == novo_callsign.upper() and f[0] != usuario.id for f in funcionarios_db)
+            if taken:
+                return await ctx.followup.send(f"❌ O Callsign `{novo_callsign}` já está em uso por outro funcionário.")
+                
+        patente_antiga_info = config["cargos_patentes"].get(patente_antiga_key)
+        nova_patente_info = config["cargos_patentes"].get(novo_cargo) if novo_cargo else None
+        
+        cargos_para_remover = []
+        cargos_para_adicionar = []
+        
+        if novo_cargo and patente_antiga_key != novo_cargo:
+            if patente_antiga_info:
+                cargo_antigo = ctx.guild.get_role(patente_antiga_info["id"])
+                if cargo_antigo:
+                    cargos_para_remover.append(cargo_antigo)
+            
+            if nova_patente_info:
+                cargo_novo = ctx.guild.get_role(nova_patente_info["id"])
+                if cargo_novo:
+                    cargos_para_adicionar.append(cargo_novo)
+                    
+        if cargos_para_remover or cargos_para_adicionar:
+            try:
+                if cargos_para_remover:
+                    await usuario.remove_roles(*cargos_para_remover)
+                if cargos_para_adicionar:
+                    await usuario.add_roles(*cargos_para_adicionar)
+            except discord.Forbidden:
+                pass
+                
+        final_patente = novo_cargo if novo_cargo else patente_antiga_key
+        final_callsign = novo_callsign if novo_callsign else callsign_antigo
+        final_nome = novo_nome if novo_nome else nome_antigo
+        
+        await db.add_funcionario(usuario.id, final_patente, final_callsign, final_nome)
+        
+        novo_nick = f"[{final_callsign}] {final_nome}"
+        try:
+            await usuario.edit(nick=novo_nick)
+        except discord.Forbidden:
+            pass
+            
+        desc_alteracoes = []
+        if novo_callsign:
+            desc_alteracoes.append(f"**Callsign:** `{callsign_antigo}` ➔ `{final_callsign}`")
+        if novo_nome:
+            desc_alteracoes.append(f"**Nome:** `{nome_antigo}` ➔ `{final_nome}`")
+        if novo_cargo:
+            cargo_antigo_nome = patente_antiga_info["nome"] if patente_antiga_info else "Desconhecido"
+            cargo_novo_nome = nova_patente_info["nome"] if nova_patente_info else "Desconhecido"
+            desc_alteracoes.append(f"**Cargo:** `{cargo_antigo_nome}` ➔ `{cargo_novo_nome}`")
+            
+        desc_alteracoes_str = "\n".join(desc_alteracoes)
+        
+        try:
+            msg_dm = (
+                f'**<:aviso:1269036173381206132> AVISO: Dados Alterados Manualmente!**\n'
+                f'**→ Staff:** {ctx.author.mention}\n'
+                f'**→ Alterações:**\n'
+                f'{desc_alteracoes_str}\n'
+                f'**→ Motivo:** {motivo}\n\n'
+                f'*Nota: Se o seu Callsign foi alterado, utilize o seu novo Callsign `{final_callsign}` para aceder ao Painel Web (a sua palavra-passe permanece inalterada).*'
+            )
+            await usuario.send(msg_dm)
+        except (discord.HTTPException, discord.Forbidden):
+            pass
+            
+        log_canal_id = config.get("log_contratacoes_id")
+        if log_canal_id:
+            log_canal = ctx.guild.get_channel(log_canal_id)
+            if log_canal:
+                embed_log = discord.Embed(
+                    title='LOG: Edição Manual de Funcionário',
+                    description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n{desc_alteracoes_str}\n**→ `Motivo`: {motivo}**',
+                    colour=discord.Colour.orange()
+                )
+                embed_log.set_author(name='Edição manual efetuada', icon_url=self.client.user.display_avatar)
+                await log_canal.send(embed=embed_log)
+                
+        embed = discord.Embed(
+            title="✅ Funcionário Editado com Sucesso",
+            description=f"Os dados de {usuario.mention} foram atualizados com sucesso!\n\n{desc_alteracoes_str}\n\n**Motivo:** {motivo}",
+            color=discord.Colour.green()
+        )
+        await ctx.followup.send(embed=embed)
 
     @commands.slash_command(description='[ADM] Reseta as horas do pica-ponto de um determinado usuário', contexts={discord.InteractionContextType.guild})
     @commands.has_any_role(config['staff_role_id'])
