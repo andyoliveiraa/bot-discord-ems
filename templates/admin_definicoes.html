@@ -323,43 +323,37 @@ async function encerrarSemana() {
 }
 
 function gerarPdfSemana(semanaId) {
-    Swal.fire({
-        title: 'A gerar PDF...',
-        text: 'O relatório detalhado está a ser processado. Pode demorar alguns segundos.',
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading()
+    const btn = event.currentTarget;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A gerar...';
+
+    const showMsg = (title, text, icon) => {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon, title, text });
+        } else {
+            alert(title + '\n' + text);
         }
-    });
+    };
 
     fetch(`/api/semana/${semanaId}/gerar-pdf`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
     })
     .then(r => r.json())
     .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
         if (data.success) {
-            Swal.fire({
-                icon: 'success',
-                title: 'PDF Gerado!',
-                text: 'O relatório foi enviado com sucesso para o canal de Logs no Discord.'
-            });
+            showMsg('PDF Gerado!', 'O relatório foi enviado para o canal de Logs no Discord.', 'success');
         } else {
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro',
-                text: data.message || 'Ocorreu um erro ao gerar o PDF.'
-            });
+            showMsg('Erro ao gerar PDF', data.message || 'Ocorreu um erro desconhecido.', 'error');
         }
     })
     .catch(err => {
-        Swal.fire({
-            icon: 'error',
-            title: 'Erro',
-            text: 'Falha na comunicação com o servidor.'
-        });
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        showMsg('Erro de Ligação', 'Não foi possível comunicar com o servidor: ' + err, 'error');
     });
 }
 

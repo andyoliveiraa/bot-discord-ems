@@ -786,8 +786,9 @@ async def admin_definicoes():
 
 @app.route('/api/semana/<int:semana_id>/gerar-pdf', methods=['POST'])
 @login_required
-@direcao_required
 async def api_gerar_pdf_semana(semana_id):
+    if not session.get('is_admin') and not session.get('is_direcao'):
+        return jsonify({"success": False, "message": "Sem permissão."}), 403
     try:
         from pdf_helper import gerar_pdf_detalhado
         import discord
