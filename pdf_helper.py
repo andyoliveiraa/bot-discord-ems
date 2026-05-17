@@ -92,8 +92,8 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
         if func_db:
             nome_func  = f"[{func_db[1]}] {func_db[2]}"
             cargo_id   = func_db[0]
-            cargo_nome = func_db[1] if len(func_db) > 1 else cargo_id
             patente_info = config_atual.get("cargos_patentes", {}).get(cargo_id, {})
+            cargo_nome = patente_info.get("nome", cargo_id)
             valor_hora   = patente_info.get("valor_hora", 0)
         else:
             nome_func  = f"Funcionario ID: {user_id}"
@@ -246,6 +246,7 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
             turno_num = 0
             for pt in pontos:
                 p_id, started, finished, staff_finished, duration, pauses_str = pt
+                duration = duration or 0
 
                 try:
                     pausas = json.loads(pauses_str) if pauses_str else []

@@ -805,7 +805,7 @@ async def api_gerar_pdf_semana(semana_id):
         
         pdf_path = await gerar_pdf_detalhado(db, config, semana_id, inicio, fim)
         if not pdf_path:
-            return jsonify({"success": False, "message": "Erro ao gerar PDF ou sem pagamentos associados."}), 500
+            return jsonify({"success": False, "message": "Erro ao gerar PDF ou sem pagamentos associados."}), 200
             
         bot_client = app.config.get('BOT_CLIENT')
         if bot_client:
@@ -821,7 +821,7 @@ async def api_gerar_pdf_semana(semana_id):
         return jsonify({"success": True})
     except Exception as e:
         print(f"Erro ao gerar pdf: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": str(e)}), 200
 
 
 @app.route('/api/admin/funcionario/<int:uid>/action', methods=['POST'])
