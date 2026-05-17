@@ -76,6 +76,7 @@ O sistema baseia-se num ficheiro `config.json` e num ficheiro de base de dados S
 ### Comandos Staff
 - `/contratar @user [patente] [nome] [motivo]` — Registra um novo funcionário, cria callsign e gera senha web.
 - `/promover @user [nova_patente] [motivo]` — Altera a patente, o callsign e os cargos Discord associados.
+- `/editar_funcionario @user [motivo] [novo_callsign] [novo_nome] [novo_cargo]` — Altera manualmente o indicativo (callsign), nome e/ou cargo de um funcionário.
 - `/despedir @user [motivo]` — Remove o funcionário da corporação e retira os seus cargos.
 - `/addtempo @user [horas] [minutos] [motivo]` — Adiciona tempo manual a um funcionário.
 - `/deltempo @user [horas] [minutos] [motivo]` — Remove tempo manual de um funcionário.
