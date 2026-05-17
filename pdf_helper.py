@@ -27,14 +27,14 @@ def _enc(txt):
 def _linha(pdf, txt, cor=(0, 0, 0), estilo='', tamanho=10, altura=6):
     pdf.set_text_color(*cor)
     pdf.set_font("Arial", estilo, tamanho)
-    pdf.multi_cell(190, altura, _enc(txt))
+    pdf.multi_cell(190, altura, _enc(txt), new_x='LMARGIN', new_y='NEXT')
     pdf.set_text_color(0, 0, 0)
 
 
 def _linha_multi(pdf, txt, cor=(0, 0, 0), tamanho=9):
     pdf.set_text_color(*cor)
     pdf.set_font("Arial", '', tamanho)
-    pdf.multi_cell(190, 5, _enc(txt))
+    pdf.multi_cell(190, 5, _enc(txt), new_x='LMARGIN', new_y='NEXT')
     pdf.set_text_color(0, 0, 0)
 
 
@@ -43,15 +43,15 @@ def _cabecalho_func(pdf, nome_func, cargo_nome, valor_hora, estado_pag, pago, pa
     pdf.set_fill_color(50, 50, 80)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Arial", 'B', 13)
-    pdf.multi_cell(190, 10, _enc(f"  {nome_func}"), fill=True)
+    pdf.multi_cell(190, 10, _enc(f"  {nome_func}"), fill=True, new_x='LMARGIN', new_y='NEXT')
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Arial", '', 9)
     pdf.multi_cell(190, 5, _enc(
         f"  Cargo: {cargo_nome}  |  Valor/Hora: {_fmt_moeda(valor_hora)}  |  Estado: {estado_pag}"
-    ))
+    ), new_x='LMARGIN', new_y='NEXT')
     if pago == 1 and pago_em:
         dt_pago = datetime.datetime.fromtimestamp(pago_em, tz_obj).strftime('%d/%m/%Y as %H:%M')
-        pdf.multi_cell(190, 5, _enc(f"  Pago em: {dt_pago}  |  Staff ID: {pago_por}"))
+        pdf.multi_cell(190, 5, _enc(f"  Pago em: {dt_pago}  |  Staff ID: {pago_por}"), new_x='LMARGIN', new_y='NEXT')
     pdf.ln(2)
 
 
@@ -144,7 +144,7 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
         "Para cada funcionario sao listados todos os turnos individualmente, com horarios de entrada e saida, "
         "pausas realizadas, ajustes manuais efetuados por Staff, e a formula exata de calculo do pagamento."
     )
-    pdf.multi_cell(190, 5, _enc(intro), border=1, fill=True)
+    pdf.multi_cell(190, 5, _enc(intro), border=1, fill=True, new_x='LMARGIN', new_y='NEXT')
     pdf.ln(6)
 
     # Indice
@@ -260,7 +260,7 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
                 if staff_finished == 2:
                     pdf.set_fill_color(220, 255, 220)
                     pdf.set_font("Arial", 'B', 9)
-                    pdf.multi_cell(190, 6, _enc(f"  [AJUSTE POSITIVO por Staff] em {dt_in_str}"), fill=True)
+                    pdf.multi_cell(190, 6, _enc(f"  [AJUSTE POSITIVO por Staff] em {dt_in_str}"), fill=True, new_x='LMARGIN', new_y='NEXT')
                     _linha_multi(pdf,
                         f"    Staff adicionou manualmente {_fmt_dur(duration)} de trabalho a este funcionario.",
                         cor=(0, 100, 0), tamanho=8)
@@ -272,7 +272,7 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
                 elif staff_finished == 3:
                     pdf.set_fill_color(255, 220, 220)
                     pdf.set_font("Arial", 'B', 9)
-                    pdf.multi_cell(190, 6, _enc(f"  [AJUSTE NEGATIVO por Staff] em {dt_in_str}"), fill=True)
+                    pdf.multi_cell(190, 6, _enc(f"  [AJUSTE NEGATIVO por Staff] em {dt_in_str}"), fill=True, new_x='LMARGIN', new_y='NEXT')
                     _linha_multi(pdf,
                         f"    Staff removeu manualmente {_fmt_dur(abs(duration))} de trabalho a este funcionario.",
                         cor=(150, 0, 0), tamanho=8)
@@ -310,10 +310,10 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
 
                     pdf.set_fill_color(*cor_fundo)
                     pdf.set_font("Arial", 'B', 9)
-                    pdf.multi_cell(190, 6, _enc(f"  Turno #{turno_num} | {dt_in_str}  ->  {dt_out_str}"), fill=True)
+                    pdf.multi_cell(190, 6, _enc(f"  Turno #{turno_num} | {dt_in_str}  ->  {dt_out_str}"), fill=True, new_x='LMARGIN', new_y='NEXT')
                     pdf.set_font("Arial", '', 8)
                     pdf.set_text_color(*cor_aviso)
-                    pdf.multi_cell(190, 5, _enc(f"    Tipo de fecho: {tipo_fecho}"))
+                    pdf.multi_cell(190, 5, _enc(f"    Tipo de fecho: {tipo_fecho}"), new_x='LMARGIN', new_y='NEXT')
                     pdf.set_text_color(0, 0, 0)
 
                     if pausas:
