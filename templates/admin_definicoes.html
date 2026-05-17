@@ -138,7 +138,12 @@
             {% endif %}
             Semana {{ s.inicio }} &#8594; {{ s.fim }}
           </h4>
-          <span style="color:var(--muted);font-size:.85rem;">{{ s.total_pago }}/{{ s.total }} pagos</span>
+          <div style="display:flex;align-items:center;gap:15px;">
+            <span style="color:var(--muted);font-size:.85rem;">{{ s.total_pago }}/{{ s.total }} pagos</span>
+            {% if s.encerrada %}
+            <button class="btn-secondary" style="padding:0.4rem 0.8rem;font-size:0.8rem;" onclick="gerarPdfSemana({{ s.id }})"><i class="fas fa-file-pdf"></i> PDF Detalhado</button>
+            {% endif %}
+          </div>
         </div>
         {% if s.pagamentos %}
         <div class="table-container">
@@ -315,6 +320,47 @@ async function encerrarSemana() {
   var data = await res.json();
   if (data.ok) { alert('Semana encerrada! ' + data.pagamentos + ' pagamento(s) criado(s).'); location.reload(); }
   else { alert('Erro: ' + data.erro); }
+}
+
+function gerarPdfSemana(semanaId) {
+    Swal.fire({
+        title: 'A gerar PDF...',
+        text: 'O relatório detalhado está a ser processado. Pode demorar alguns segundos.',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading()
+        }
+    });
+
+    fetch(`/api/semana/${semanaId}/gerar-pdf`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'PDF Gerado!',
+                text: 'O relatório foi enviado com sucesso para o canal de Logs no Discord.'
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: data.message || 'Ocorreu um erro ao gerar o PDF.'
+            });
+        }
+    })
+    .catch(err => {
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro',
+            text: 'Falha na comunicação com o servidor.'
+        });
+    });
 }
 
 // Fechar modais ao clicar fora

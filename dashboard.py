@@ -344,7 +344,7 @@ async def meus_pontos():
     func_list = []
     if is_admin or is_direcao:
         func_list = await db.get_all_funcionarios()
-        func_list.sort(key=lambda x: x[3].lower()) # Sort by name
+        func_list.sort(key=lambda x: (x[3] or '').lower()) # Sort by name, None-safe
         uid_param = request.args.get('uid')
         if uid_param:
             try:
@@ -372,7 +372,7 @@ async def meus_pontos():
             pausas = []
 
         hr_in = datetime.datetime.fromtimestamp(started, tz(tz_cfg)).strftime('%H:%M')
-        hr_out = datetime.datetime.fromtimestamp(finished, tz(tz_cfg)).strftime('%H:%M')
+        hr_out = datetime.datetime.fromtimestamp(finished, tz(tz_cfg)).strftime('%H:%M') if finished else '--:--'
         h_dur = int((duration or 0) // 3600)
         m_dur = int(((duration or 0) % 3600) // 60)
 
@@ -389,7 +389,7 @@ async def meus_pontos():
         })
 
     dias_formatados = []
-    for dia, dados in sorted(por_dia.items(), key=lambda x: x[0].split('/')[::-1]):
+    for dia, dados in sorted(por_dia.items(), key=lambda x: tuple(x[0].split('/')[::-1])):
         th = int(dados['total_seg'] // 3600)
         tm = int((dados['total_seg'] % 3600) // 60)
         dias_formatados.append({'dia': dia, 'total_h': th, 'total_m': tm, 'registros': dados['registros']})
@@ -783,6 +783,45 @@ async def admin_definicoes():
         is_admin=session.get('is_admin'),
         is_direcao=session.get('is_direcao'),
         ordenado_cargos=sorted(cargos.items(), key=lambda x: x[1].get('valor_hora', 0), reverse=True))
+
+@app.route('/api/semana/<int:semana_id>/gerar-pdf', methods=['POST'])
+@login_required
+@direcao_required
+async def api_gerar_pdf_semana(semana_id):
+    try:
+        from pdf_helper import gerar_pdf_detalhado
+        import discord
+        semanas = await db.get_todas_semanas()
+        semana_info = next((s for s in semanas if s[0] == semana_id), None)
+        if not semana_info:
+            return jsonify({"success": False, "message": "Semana não encontrada."}), 404
+            
+        inicio = semana_info[1]
+        fim = semana_info[2]
+        
+        from db import get_configs
+        config_atual = get_configs()
+        
+        pdf_path = await gerar_pdf_detalhado(db, config, semana_id, inicio, fim)
+        if not pdf_path:
+            return jsonify({"success": False, "message": "Erro ao gerar PDF ou sem pagamentos associados."}), 500
+            
+        bot_client = app.config.get('BOT_CLIENT')
+        if bot_client:
+            log_channel_id = config_atual.get('log_channel_id')
+            if log_channel_id:
+                channel = bot_client.get_channel(int(log_channel_id))
+                if channel:
+                    await channel.send(
+                        content=f'📄 **Relatório Analítico Detalhado (Painel Web)**\nSemana ID: `{semana_id}`\nPor: <@{session.get("user_id")}>',
+                        file=discord.File(pdf_path)
+                    )
+                    
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Erro ao gerar pdf: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 
 @app.route('/api/admin/funcionario/<int:uid>/action', methods=['POST'])
 @direcao_required
