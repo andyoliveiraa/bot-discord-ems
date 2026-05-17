@@ -742,11 +742,36 @@ async def admin_definicoes():
         inicio_str = datetime.datetime.fromtimestamp(inicio, tz(tz_cfg)).strftime('%d/%m/%Y')
         fim_str = datetime.datetime.fromtimestamp(fim, tz(tz_cfg)).strftime('%d/%m/%Y') if fim else 'Activa'
         pagamentos = await db.get_pagamentos_semana(sid)
-        total_pago = sum(1 for p in pagamentos if p[4] == 1)
-        total = len(pagamentos)
+        
+        pagamentos_enrich = []
+        for p in pagamentos:
+            uid_p = p[2]
+            p_callsign = ""
+            p_nome = ""
+            for f_db in funcionarios:
+                if f_db[0] == uid_p:
+                    p_callsign = f_db[2]
+                    p_nome = f_db[3]
+                    break
+            if not p_nome:
+                p_nome = f"ID: {uid_p}"
+            pagamentos_enrich.append({
+                'id': p[0],
+                'semana_id': p[1],
+                'user_id': p[2],
+                'valor': p[3],
+                'pago': p[4],
+                'pago_em': p[5],
+                'pago_por': p[6],
+                'callsign': p_callsign,
+                'nome': p_nome
+            })
+
+        total_pago = sum(1 for p in pagamentos_enrich if p['pago'] == 1)
+        total = len(pagamentos_enrich)
         semanas_info.append({
             'id': sid, 'inicio': inicio_str, 'fim': fim_str,
-            'encerrada': encerrada, 'pagamentos': pagamentos,
+            'encerrada': encerrada, 'pagamentos': pagamentos_enrich,
             'total_pago': total_pago, 'total': total,
         })
 
