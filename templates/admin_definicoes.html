@@ -152,11 +152,10 @@
                     <img src="{{ pag.user_id | get_avatar }}" class="avatar-table" alt="Avatar">
                     <div>
                       {% if pag.callsign %}
-                      <strong>[{{ pag.callsign }}]</strong> {{ pag.nome }}
+                      <span style="display:block;font-size:1rem;"><strong>[{{ pag.callsign }}]</strong> {{ pag.nome }}</span>
                       {% else %}
-                      {{ pag.nome }}
+                      <span style="display:block;font-size:1rem;">{{ pag.nome }}</span>
                       {% endif %}
-                      <span style="color:var(--muted);font-size:.8rem;display:block;">ID:{{ pag.user_id }}</span>
                     </div>
                   </div>
                 </td>

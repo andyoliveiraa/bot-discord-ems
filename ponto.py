@@ -351,7 +351,14 @@ class PicaPonto(commands.Cog):
             desc = f'**⚠️ Semana `{inicio_str}` → `{fim_str}` tem funcionários por pagar:**\n\n'
             total_em_divida = 0
             for user_id, valor in dados['funcionarios']:
-                desc += f'**→** <@{user_id}> — `{formatar_moeda_local(valor)}`\n'
+                func = await db.get_funcionario(user_id)
+                if func:
+                    nome_exib = f"[{func[1]}] {func[2]}"
+                else:
+                    membro = self.client.get_user(user_id)
+                    nome_exib = membro.display_name if membro else f"ID: {user_id}"
+                    
+                desc += f'**→** **{nome_exib}** — `{formatar_moeda_local(valor)}`\n'
                 total_em_divida += valor
             desc += f'\n**💰 Total em dívida:** `{formatar_moeda_local(total_em_divida)}`'
             desc += f'\n\n*Marque como pago no painel: `https://ems.discloud.app/admin/definicoes`*'
@@ -911,13 +918,17 @@ class PicaPonto(commands.Cog):
             func_db = await db.get_funcionario(user[0])
             pagamento_str = ""
             if func_db:
+                nome_exib = f"[{func_db[1]}] {func_db[2]}"
                 patente_info = config.get("cargos_patentes", {}).get(func_db[0])
                 if patente_info:
                     valor_hora = patente_info.get("valor_hora", 0)
                     pagamento = ((horas * 60 + minutos) / 60) * valor_hora
                     pagamento_str = f' - 💰 `{formatar_moeda(pagamento)}`'
+            else:
+                membro = ctx.guild.get_member(user[0])
+                nome_exib = membro.display_name if membro else f"ID: {user[0]}"
             
-            embed.add_field(name=f'{index+1}º Lugar', value=f'<@{user[0]}> - `{horas}h:{minutos}m`{pagamento_str}', inline=False)
+            embed.add_field(name=f'{index+1}º Lugar', value=f'**{nome_exib}** - `{horas}h:{minutos}m`{pagamento_str}', inline=False)
             
         await ctx.respond(embed=embed)
 
@@ -1417,8 +1428,15 @@ class BotoesSemana(View):
                     if reg[3] == 0 and reg[2] and reg[2] > 10000:
                         nao_contabilizados.append((data_str, reg[2]))
 
+                func_db = await db.get_funcionario(user_id)
+                if func_db:
+                    nome_exib = f"[{func_db[1]}] {func_db[2]}"
+                else:
+                    membro = inter.guild.get_member(user_id)
+                    nome_exib = membro.display_name if membro else f"ID: {user_id}"
+
                 embed_user = discord.Embed(
-                    description=f'<@{user_id}>\n\u23f1\ufe0f **Total Semanal: `{sign_total}{str(horas_total).zfill(2)}h {str(minutos_total).zfill(2)}m`**',
+                    description=f'**{nome_exib}**\n\u23f1\ufe0f **Total Semanal: `{sign_total}{str(horas_total).zfill(2)}h {str(minutos_total).zfill(2)}m`**',
                     color=discord.Colour.blurple()
                 )
                 for dia, seg_dia in sorted(por_dia.items()):
