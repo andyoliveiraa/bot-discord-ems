@@ -113,6 +113,10 @@ async def recarregar_config():
     if db_configs:
         config.update(db_configs)
         print("[DASHBOARD] Configurações recarregadas da BD.")
+        try:
+            save_configs(config)
+        except Exception as e:
+            print(f"[DASHBOARD] Erro ao sincronizar config.json: {e}")
     else:
         # Fallback para config.json se a BD estiver vazia
         config = get_configs()

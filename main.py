@@ -15,6 +15,11 @@ from db import get_configs, Database
 config = get_configs()
 db = Database('db.sqlite3')
 
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 client = commands.Bot(command_prefix=".", help_command=None, intents=discord.Intents().all())
 client.config = config # Permite acesso fácil à config pelo bot e dashboard
 client.load_extension('ponto')

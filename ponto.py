@@ -674,9 +674,14 @@ class PicaPonto(commands.Cog):
             await usuario.edit(nick=novo_nick)
         except discord.Forbidden:
             pass
-            
-        velha_letra, velho_num = func[1].split('-')
-        velho_num = int(velho_num)
+        if func[1] and '-' in func[1]:
+            velha_letra, velho_num = func[1].split('-')
+            try:
+                velho_num = int(velho_num)
+            except ValueError:
+                velho_num = 0
+        else:
+            velha_letra, velho_num = "", 0
         await db.add_funcionario(usuario.id, nova_patente, novo_callsign, nome_func)
         
         shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
@@ -728,7 +733,7 @@ class PicaPonto(commands.Cog):
         if novo_callsign:
             # Verificar se o novo callsign já está em uso por outro funcionário
             funcionarios_db = await db.get_all_funcionarios()
-            taken = any(f[2].upper() == novo_callsign.upper() and f[0] != usuario.id for f in funcionarios_db)
+            taken = any(f[2] and f[2].upper() == novo_callsign.upper() and f[0] != usuario.id for f in funcionarios_db)
             if taken:
                 return await ctx.followup.send(f"❌ O Callsign `{novo_callsign}` já está em uso por outro funcionário.")
                 
