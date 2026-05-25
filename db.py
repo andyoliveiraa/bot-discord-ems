@@ -576,6 +576,12 @@ def get_configs():
     Nota: Como o bot usa async em quase tudo, o ideal é usar Database.get_all_configs().
     Este método síncrono é mantido para compatibilidade inicial mas deve ser evitado.
     """
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+
     configs = {}
     
     # 1. Tentar ler do config.json
@@ -623,6 +629,46 @@ def get_configs():
     for k, v in default_configs.items():
         if k not in configs or configs[k] is None:
             configs[k] = v
+            
+    # 4. Sobrescrever/complementar qualquer chave se a respectiva variável de ambiente estiver definida
+    env_mappings = {
+        "SERVER_NAME": ("server_name", str),
+        "BOT_TOKEN": ("token", str),
+        "TOKEN": ("token", str),
+        "DISCORD_TOKEN": ("token", str),
+        "token": ("token", str),
+        "bot_token": ("token", str),
+        "OWNER_ID": ("owner_id", int),
+        "LOG_CHANNEL_ID": ("log_channel_id", int),
+        "LOG_CONTRATACOES_ID": ("log_contratacoes_id", int),
+        "STAFF_ROLE_ID": ("staff_role_id", int),
+        "PONTO_ROLE_ID": ("ponto_role_id", int),
+        "NOME_CORP": ("nome_corp", str),
+        "TIMEZONE": ("timezone", str),
+        "CARGO_EQUIPA_ID": ("cargo_equipa_id", int),
+    }
+    
+    for env_key, (config_key, cast_type) in env_mappings.items():
+        val = os.getenv(env_key)
+        if val is not None and val.strip() != "":
+            try:
+                if cast_type == int:
+                    configs[config_key] = int(val.strip())
+                else:
+                    configs[config_key] = val.strip()
+            except Exception as e:
+                print(f"[GET_CONFIGS] Erro ao converter {env_key} para {cast_type}: {e}")
+                
+    # Variável de ambiente especial para cargos_patentes como JSON string
+    cargos_env = os.getenv("CARGOS_PATENTES")
+    if cargos_env is not None and cargos_env.strip() != "":
+        try:
+            parsed = json.loads(cargos_env.strip())
+            if isinstance(parsed, dict):
+                configs["cargos_patentes"] = parsed
+                print("[GET_CONFIGS] Configuração cargos_patentes carregada com sucesso do .env")
+        except Exception as e:
+            print(f"[GET_CONFIGS] Erro ao analisar CARGOS_PATENTES como JSON do .env: {e}")
             
     return configs
 
