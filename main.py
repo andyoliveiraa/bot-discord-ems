@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import asyncio
 import aiohttp
 from itertools import cycle
@@ -224,7 +226,14 @@ async def ping(ctx: discord.ApplicationContext):
 
 if __name__ == "__main__":
     # Inicialização final do bot usando o token do ambiente
-    token = os.getenv('BOT_TOKEN') or config.get('token')
+    token = (
+        os.getenv('BOT_TOKEN') or 
+        os.getenv('TOKEN') or 
+        os.getenv('DISCORD_TOKEN') or 
+        os.getenv('token') or 
+        os.getenv('bot_token') or 
+        config.get('token')
+    )
     if token:
         client.run(token)
     else:
