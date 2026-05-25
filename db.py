@@ -576,10 +576,56 @@ def get_configs():
     Nota: Como o bot usa async em quase tudo, o ideal é usar Database.get_all_configs().
     Este método síncrono é mantido para compatibilidade inicial mas deve ser evitado.
     """
+    configs = {}
+    
+    # 1. Tentar ler do config.json
     if os.path.exists('config.json'):
-        with open('config.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {}
+        try:
+            with open('config.json', 'r', encoding='utf-8') as f:
+                configs = json.load(f)
+        except Exception as e:
+            print(f"[GET_CONFIGS] Erro ao ler config.json: {e}")
+            
+    # 2. Se estiver vazio ou sem timezone, tentar ler da BD sqlite3 de forma síncrona
+    if (not configs or "timezone" not in configs) and os.path.exists('db.sqlite3'):
+        try:
+            import sqlite3
+            conn = sqlite3.connect('db.sqlite3')
+            cursor = conn.cursor()
+            # Verificar se a tabela configuracoes existe
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='configuracoes'")
+            if cursor.fetchone():
+                cursor.execute("SELECT chave, valor FROM configuracoes")
+                rows = cursor.fetchall()
+                for row in rows:
+                    key, val = row[0], row[1]
+                    try:
+                        # Tentar fazer parse do JSON se aplicável
+                        configs[key] = json.loads(val)
+                    except Exception:
+                        configs[key] = val
+            conn.close()
+        except Exception as e:
+            print(f"[GET_CONFIGS] Erro ao ler db.sqlite3 de forma síncrona: {e}")
+            
+    # 3. Garantir valores padrão para evitar erros de importação/inicialização
+    default_configs = {
+        "timezone": "Europe/Lisbon",
+        "staff_role_id": 0,
+        "ponto_role_id": 0,
+        "owner_id": 0,
+        "log_channel_id": 0,
+        "nome_corp": "EMS",
+        "server_name": "EMS",
+        "cargos_patentes": {}
+    }
+    
+    for k, v in default_configs.items():
+        if k not in configs or configs[k] is None:
+            configs[k] = v
+            
+    return configs
+
 
 
 def save_configs(config: dict):

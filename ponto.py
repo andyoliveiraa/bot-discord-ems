@@ -74,7 +74,7 @@ async def gerar_pdf_semanal(top_todos, guild):
         por_dia = {}
         nao_contabilizados = []
         for reg in registros:
-            data_str = datetime.datetime.fromtimestamp(reg[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
+            data_str = datetime.datetime.fromtimestamp(reg[0], obter_timezone()).strftime("%d/%m/%Y")
             por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
             
             if reg[3] == 0 and reg[2] and reg[2] > 10000:
@@ -117,6 +117,32 @@ def save_active_pontos():
     with open(ACTIVE_PONTOS_FILE, "w") as f:
         json.dump(active_pontos, f)
 
+def obter_timezone():
+    tz_str = config.get("timezone", "Europe/Lisbon") if isinstance(config, dict) else "Europe/Lisbon"
+    if not tz_str:
+        tz_str = "Europe/Lisbon"
+    try:
+        return timezone(tz_str)
+    except Exception:
+        return timezone("Europe/Lisbon")
+
+def has_staff_role():
+    async def predicate(ctx):
+        owner_id = config.get('owner_id')
+        if owner_id and ctx.author.id == int(owner_id):
+            return True
+            
+        staff_role_id = config.get('staff_role_id')
+        if not staff_role_id:
+            raise commands.MissingAnyRole([0])
+            
+        role = ctx.guild.get_role(int(staff_role_id)) if ctx.guild else None
+        if role and role in ctx.author.roles:
+            return True
+            
+        raise commands.MissingAnyRole([int(staff_role_id)])
+    return commands.check(predicate)
+
 class PicaPonto(commands.Cog):
     def __init__(self, client):
         self.client = client
@@ -128,7 +154,7 @@ class PicaPonto(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def auto_close_task(self):
-        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        agora = int(datetime.datetime.now(obter_timezone()).timestamp())
         for user_id, estado in list(active_pontos.items()):
             if agora - estado["inicio"] >= 86400: # 24 horas inativo
                 horario_inicio = estado["inicio"]
@@ -147,10 +173,10 @@ class PicaPonto(commands.Cog):
                 
                 canal_log = self.client.get_channel(config["log_channel_id"])
                 if canal_log and user:
-                    data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
-                    embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado Automaticamente (24h Inatividade)** *(horas não contabilizadas)*\n**→ `Funcionário`: {user.mention}**\n'
+                    data_abertura = datetime.datetime.fromtimestamp(horario_inicio, obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")
+                    embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado Automatically (24h Inactivity)** *(horas não contabilizadas)*\n**→ `Funcionário`: {user.mention}**\n'
                         f'**→ `Horário de Abertura`: {data_abertura}**\n'
-                        f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n**→ `Tempo total de serviço`: 00 horas e 00 minutos**', colour=discord.Colour.dark_gray())
+                        f'**→ `Horário de Fechamento`: {datetime.datetime.now(obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")}**\n**→ `Tempo total de serviço`: 00 horas e 00 minutos**', colour=discord.Colour.dark_gray())
                     embed_log.set_author(name='LOG: Inatividade Detectada', icon_url=self.client.user.display_avatar)
                     await canal_log.send(embed=embed_log)
                     try:
@@ -161,7 +187,7 @@ class PicaPonto(commands.Cog):
     async def before_auto_close_task(self):
         await self.client.wait_until_ready()
 
-    @tasks.loop(time=datetime.time(hour=7, minute=0, tzinfo=timezone(config["timezone"])))
+    @tasks.loop(time=datetime.time(hour=7, minute=0, tzinfo=obter_timezone()))
     async def auto_backup_task(self):
         canal_log = self.client.get_channel(config["log_channel_id"])
         if canal_log:
@@ -321,7 +347,7 @@ class PicaPonto(commands.Cog):
     async def before_auto_register_task(self):
         await self.client.wait_until_ready()
 
-    @tasks.loop(time=datetime.time(hour=9, minute=0, tzinfo=timezone(config["timezone"])))
+    @tasks.loop(time=datetime.time(hour=9, minute=0, tzinfo=obter_timezone()))
     async def auto_lembrete_pagamentos_task(self):
         """Envia lembrete diário no canal de log sobre funcionários por pagar."""
         impagos = await db.get_semanas_com_impagos()
@@ -344,9 +370,9 @@ class PicaPonto(commands.Cog):
 
         for semana_id, dados in semanas_dict.items():
             inicio_str = datetime.datetime.fromtimestamp(
-                dados['inicio'], timezone(config['timezone'])).strftime('%d/%m/%Y')
+                dados['inicio'], obter_timezone()).strftime('%d/%m/%Y')
             fim_str = datetime.datetime.fromtimestamp(
-                dados['fim'], timezone(config['timezone'])).strftime('%d/%m/%Y') if dados['fim'] else 'N/A'
+                dados['fim'], obter_timezone()).strftime('%d/%m/%Y') if dados['fim'] else 'N/A'
 
             desc = f'**⚠️ Semana `{inicio_str}` → `{fim_str}` tem funcionários por pagar:**\n\n'
             total_em_divida = 0
@@ -423,7 +449,7 @@ class PicaPonto(commands.Cog):
             print(f"[SISTEMA] {count} pica-pontos restaurados com sucesso.")
 
     @commands.slash_command(description='[ADM] Adiciona horas/minutos para uma pessoa no pica-ponto', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def addtempo(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True),
                     horas: Option(int, "Digite a quantidade de horas", required=True, min_value=0),
                     minutos: Option(int, "Digite a quantidade de minutos", required=True, min_value=0, max_value=59),
@@ -436,7 +462,7 @@ class PicaPonto(commands.Cog):
         total = (int(horas) * 3600) + (int(minutos) * 60)
         await db.add_time(usuario.id, total)
         
-        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        agora = int(datetime.datetime.now(obter_timezone()).timestamp())
         await db.create_registry(usuario.id, agora, agora, 2, total, "[]")
 
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você adicionou `{horas}` horas e `{minutos}` minutos para {usuario.mention}.')
@@ -453,7 +479,7 @@ class PicaPonto(commands.Cog):
 
 
     @commands.slash_command(description='[ADM] Remove horas/minutos de uma pessoa no pica-ponto', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def deltempo(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True),
                     horas: Option(int, "Digite a quantidade de horas", required=True, min_value=0),
                     minutos: Option(int, "Digite a quantidade de minutos", required=True, min_value=0, max_value=59),
@@ -466,7 +492,7 @@ class PicaPonto(commands.Cog):
         total = (int(horas) * 3600) + (int(minutos) * 60)
         await db.del_time(usuario.id, total)
         
-        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        agora = int(datetime.datetime.now(obter_timezone()).timestamp())
         await db.create_registry(usuario.id, agora, agora, 3, -total, "[]")
 
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você removeu `{horas}` horas e `{minutos}` minutos de {usuario.mention}.')
@@ -483,7 +509,7 @@ class PicaPonto(commands.Cog):
         await canal_log.send(embed=embed_log)
 
     @commands.slash_command(name="contratar", description='[ADM] Registra um novo funcionário', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def contratar(self, ctx: discord.ApplicationContext,
                        usuario: Option(discord.Member, 'Selecione o usuário', required=True),
                        patente: Option(str, 'Selecione a patente', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
@@ -562,7 +588,7 @@ class PicaPonto(commands.Cog):
         await ctx.followup.send(embed=embed)
 
     @commands.slash_command(description='[ADM] Despede/Remove um funcionário', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def despedir(self, ctx: discord.ApplicationContext,
                           usuario: Option(discord.Member, 'Selecione o usuário', required=True),
                           motivo: Option(str, 'Motivo do despedimento', required=True)):
@@ -627,7 +653,7 @@ class PicaPonto(commands.Cog):
         await ctx.followup.send(embed=embed)
 
     @commands.slash_command(description='[ADM] Promove/Altera a patente de um funcionário', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def promover(self, ctx: discord.ApplicationContext,
                        usuario: Option(discord.Member, 'Selecione o usuário', required=True),
                        nova_patente: Option(str, 'Selecione a nova patente', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
@@ -709,7 +735,7 @@ class PicaPonto(commands.Cog):
         await ctx.followup.send(embed=embed)
 
     @commands.slash_command(name="editar_funcionario", description='[ADM] Edita manualmente o callsign, nome e/ou cargo de um funcionário', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def editar_funcionario(self, ctx: discord.ApplicationContext,
                        usuario: Option(discord.Member, 'Selecione o funcionário', required=True),
                        motivo: Option(str, 'Motivo da alteração manual', required=True),
@@ -820,7 +846,7 @@ class PicaPonto(commands.Cog):
         await ctx.followup.send(embed=embed)
 
     @commands.slash_command(description='[ADM] Reseta as horas do pica-ponto de um determinado usuário', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def resetar_usuario(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True)):
 
         func = await db.get_funcionario(usuario.id)
@@ -838,7 +864,7 @@ class PicaPonto(commands.Cog):
         await canal_log.send(embed=embed_log)
 
     @commands.slash_command(name="resetarsenha", description='[ADM] Reseta a senha do painel web de um funcionário', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def resetarsenha(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True)):
         await ctx.defer(ephemeral=True)
 
@@ -874,13 +900,13 @@ class PicaPonto(commands.Cog):
 
 
     @commands.slash_command(description='[ADM] Configura para 0 horas e apaga os dados de todos os usuários registrados.', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def resetar_todos(self, ctx: discord.ApplicationContext):
 
         await ctx.respond(view=BotoesReset())
 
     @commands.slash_command(name="autocorrecao", description='[ADM] Força a auto-correção e auto-registro de todos os funcionários', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def force_autocorrecao(self, ctx: discord.ApplicationContext):
         await ctx.defer()
         
@@ -1047,13 +1073,13 @@ class PicaPonto(commands.Cog):
         await ctx.respond(embed=embed)
 
     @commands.slash_command(name='semana', description='[ADM] Mostra o relatório semanal de horas e envia backup.', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def semana(self, ctx: discord.ApplicationContext):
         top_todos = await db.get_ranking(amount=100)
         # Filtrar apenas quem tem o cargo ponto_role_id
         cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
         top_filtrado = [u for u in top_todos if cargo_ponto and ctx.guild.get_member(u[0]) and cargo_ponto in ctx.guild.get_member(u[0]).roles]
-        agora_str = datetime.datetime.now(timezone(config['timezone'])).strftime('%d/%m/%Y \u00e0s %H:%M')
+        agora_str = datetime.datetime.now(obter_timezone()).strftime('%d/%m/%Y \u00e0s %H:%M')
 
         embed_confirmar = discord.Embed(
             title='\U0001f4ca Relatório Semanal',
@@ -1071,12 +1097,12 @@ class PicaPonto(commands.Cog):
         await ctx.respond(embed=embed_confirmar, view=BotoesSemana(top_filtrado, reset=False), ephemeral=True)
 
     @commands.slash_command(name='resetarsemana', description='[ADM] Encerra a semana: mostra relatório, backup e reseta tudo.', contexts={discord.InteractionContextType.guild})
-    @commands.has_any_role(config['staff_role_id'])
+    @has_staff_role()
     async def resetarsemana(self, ctx: discord.ApplicationContext):
         top_todos = await db.get_ranking(amount=100)
         cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
         top_filtrado = [u for u in top_todos if cargo_ponto and ctx.guild.get_member(u[0]) and cargo_ponto in ctx.guild.get_member(u[0]).roles]
-        agora_str = datetime.datetime.now(timezone(config['timezone'])).strftime('%d/%m/%Y \u00e0s %H:%M')
+        agora_str = datetime.datetime.now(obter_timezone()).strftime('%d/%m/%Y \u00e0s %H:%M')
 
         embed_confirmar = discord.Embed(
             title='\u26a0\ufe0f Encerramento Semanal',
@@ -1119,9 +1145,9 @@ class PicaPonto(commands.Cog):
         total_semana_segundos = 0
 
         for k in dados:
-            hr_inicio = datetime.datetime.fromtimestamp(k[0], timezone(config["timezone"])).strftime("%H:%M")
-            hr_fim = datetime.datetime.fromtimestamp(k[1], timezone(config["timezone"])).strftime("%H:%M")
-            data_str = datetime.datetime.fromtimestamp(k[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
+            hr_inicio = datetime.datetime.fromtimestamp(k[0], obter_timezone()).strftime("%H:%M")
+            hr_fim = datetime.datetime.fromtimestamp(k[1], obter_timezone()).strftime("%H:%M")
+            data_str = datetime.datetime.fromtimestamp(k[0], obter_timezone()).strftime("%d/%m/%Y")
             
             total_semana_segundos += k[3]
             total_dia_segundos[data_str] = total_dia_segundos.get(data_str, 0) + k[3]
@@ -1154,8 +1180,8 @@ class PicaPonto(commands.Cog):
             
             registros_por_dia[data_str].append(f'🟢 `{hr_inicio}` → `{hr_fim}`  **({hr}h {mins}m)**{"  🟡" if staff else ""}')
             for p in pausas:
-                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%H:%M")
-                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+                p_in = datetime.datetime.fromtimestamp(p[0], obter_timezone()).strftime("%H:%M")
+                p_out = datetime.datetime.fromtimestamp(p[1], obter_timezone()).strftime("%H:%M")
                 registros_por_dia[data_str].append(f'  ╰ ⏸️ Pausa: `{p_in}` → Volta: `{p_out}`')
 
         sign_total = "-" if total_semana_segundos < 0 else ""
@@ -1233,12 +1259,12 @@ class PicaPonto(commands.Cog):
             desc += '**❗ Quando encerrar o seu serviço, encerre o pica-ponto no botão abaixo**\n'
             
             for p in estado["pausas"]:
-                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%H:%M")
-                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+                p_in = datetime.datetime.fromtimestamp(p[0], obter_timezone()).strftime("%H:%M")
+                p_out = datetime.datetime.fromtimestamp(p[1], obter_timezone()).strftime("%H:%M")
                 desc += f'\n**⏸️ Pausa:** `{p_in}` **▶️ Volta:** `{p_out}`'
                 
             if estado["status"] == "pausado":
-                p_in = datetime.datetime.fromtimestamp(estado["inicio_pausa"], timezone(config["timezone"])).strftime("%H:%M")
+                p_in = datetime.datetime.fromtimestamp(estado["inicio_pausa"], obter_timezone()).strftime("%H:%M")
                 desc += f'\n**⏸️ Pausa:** `{p_in}` *(Em andamento...)*'
                 
             embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
@@ -1250,7 +1276,7 @@ class PicaPonto(commands.Cog):
             save_active_pontos()
             return await ctx.respond("✅ Seu painel de pica-ponto foi atualizado neste canal!", ephemeral=True)
             
-        horario = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        horario = int(datetime.datetime.now(obter_timezone()).timestamp())
         active_pontos[ctx.user.id] = {
             "inicio": horario,
             "msg_id": None,
@@ -1287,7 +1313,7 @@ class OpcoesFechamentoStaff(View):
         await inter.response.defer()
         estado = active_pontos[user_id]
         try:
-            horario_atual = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+            horario_atual = int(datetime.datetime.now(obter_timezone()).timestamp())
             if estado["status"] == "pausado":
                 duracao_pausa = horario_atual - estado["inicio_pausa"]
                 estado["total_pausa"] += duracao_pausa
@@ -1310,11 +1336,11 @@ class OpcoesFechamentoStaff(View):
             await db.create_registry(int(user_id), horario_inicio, horario_atual, inter.user.id, segundos_totais if contabiliza else 0, pauses_json)
             
             canal_log = inter.guild.get_channel(config["log_channel_id"])
-            data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+            data_abertura = datetime.datetime.fromtimestamp(horario_inicio, obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")
             pausas_desc = ''
             for p in estado["pausas"]:
-                p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")
-                p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+                p_in = datetime.datetime.fromtimestamp(p[0], obter_timezone()).strftime("%d/%m/%Y %H:%M")
+                p_out = datetime.datetime.fromtimestamp(p[1], obter_timezone()).strftime("%H:%M")
                 pausas_desc += f'\n**→ `Pausa`: {p_in} \u2192 Volta: {p_out}**'
             
             if contabiliza:
@@ -1328,7 +1354,7 @@ class OpcoesFechamentoStaff(View):
                 
             embed_log = discord.Embed(description=f'{log_desc}\n**→ `Funcionário`: {user.mention}**\n'
                 f'**→ `Horário de Abertura`: {data_abertura}**\n'
-                f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
+                f'**→ `Horário de Fechamento`: {datetime.datetime.now(obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
                 f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**'
                 + pausas_desc, colour=log_color)
             embed_log.set_author(name='LOG: Pica-Ponto fechado por Alto Comando/Staff', icon_url=inter.user.display_avatar)
@@ -1382,7 +1408,7 @@ class finalizarPonto(View):
             return await inter.response.send_message("❌ Você não tem permissão para pausar o pica-ponto de outra pessoa.", ephemeral=True)
             
         estado = active_pontos[target_user_id]
-        agora = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        agora = int(datetime.datetime.now(obter_timezone()).timestamp())
         
         if estado["status"] == "ativo":
             estado["status"] = "pausado"
@@ -1425,12 +1451,12 @@ class finalizarPonto(View):
         desc += '**❗ Quando encerrar o seu serviço, encerre o pica-ponto no botão abaixo**\n'
         
         for p in estado["pausas"]:
-            p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%H:%M")
-            p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+            p_in = datetime.datetime.fromtimestamp(p[0], obter_timezone()).strftime("%H:%M")
+            p_out = datetime.datetime.fromtimestamp(p[1], obter_timezone()).strftime("%H:%M")
             desc += f'\n**⏸️ Pausa:** `{p_in}` **▶️ Volta:** `{p_out}`'
             
         if estado["status"] == "pausado":
-            p_in = datetime.datetime.fromtimestamp(estado["inicio_pausa"], timezone(config["timezone"])).strftime("%H:%M")
+            p_in = datetime.datetime.fromtimestamp(estado["inicio_pausa"], obter_timezone()).strftime("%H:%M")
             desc += f'\n**⏸️ Pausa:** `{p_in}` *(Em andamento...)*'
             
         novo_embed = discord.Embed(description=desc, color=discord.Colour.yellow() if estado["status"] == "pausado" else discord.Colour.green())
@@ -1469,7 +1495,7 @@ class finalizarPonto(View):
             await inter.message.delete()
         except Exception: pass
 
-        horario_atual = int(datetime.datetime.now(timezone(config["timezone"])).timestamp())
+        horario_atual = int(datetime.datetime.now(obter_timezone()).timestamp())
         if estado["status"] == "pausado":
             duracao_pausa = horario_atual - estado["inicio_pausa"]
             estado["total_pausa"] += duracao_pausa
@@ -1492,15 +1518,15 @@ class finalizarPonto(View):
 
         canal_log = inter.guild.get_channel(config["log_channel_id"])
 
-        data_abertura = datetime.datetime.fromtimestamp(horario_inicio, timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")
+        data_abertura = datetime.datetime.fromtimestamp(horario_inicio, obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")
         pausas_desc = ''
         for p in estado["pausas"]:
-            p_in = datetime.datetime.fromtimestamp(p[0], timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")
-            p_out = datetime.datetime.fromtimestamp(p[1], timezone(config["timezone"])).strftime("%H:%M")
+            p_in = datetime.datetime.fromtimestamp(p[0], obter_timezone()).strftime("%d/%m/%Y %H:%M")
+            p_out = datetime.datetime.fromtimestamp(p[1], obter_timezone()).strftime("%H:%M")
             pausas_desc += f'\n**→ `Pausa`: {p_in} \u2192 Volta: {p_out}**'
         embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado**\n**→ `Funcionário`: {inter.user.mention}**\n'
             f'**→ `Horário de Abertura`: {data_abertura}**\n'
-            f'**→ `Horário de Fechamento`: {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
+            f'**→ `Horário de Fechamento`: {datetime.datetime.now(obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")}**\n'
             f'**→ `Tempo total de serviço`: {str(horas).zfill(2)} horas e {str(minutos).zfill(2)} minutos**'
             + pausas_desc,
             colour=discord.Colour.red())
@@ -1520,7 +1546,7 @@ class BotoesSemana(View):
         if self.top_todos:
             embed_cabecalho = discord.Embed(
                 title='\U0001f4c5 Relatório Semanal de Horas',
-                description=f'Por {inter.user.mention}  •  {datetime.datetime.now(timezone(config["timezone"])).strftime("%d/%m/%Y %H:%M")}',
+                description=f'Por {inter.user.mention}  •  {datetime.datetime.now(obter_timezone()).strftime("%d/%m/%Y %H:%M")}',
                 color=discord.Colour.blue()
             )
             await inter.channel.send(embed=embed_cabecalho)
@@ -1537,7 +1563,7 @@ class BotoesSemana(View):
                 por_dia = {}
                 nao_contabilizados = []
                 for reg in registros:
-                    data_str = datetime.datetime.fromtimestamp(reg[0], timezone(config["timezone"])).strftime("%d/%m/%Y")
+                    data_str = datetime.datetime.fromtimestamp(reg[0], obter_timezone()).strftime("%d/%m/%Y")
                     por_dia[data_str] = por_dia.get(data_str, 0) + (reg[3] or 0)
                     if reg[3] == 0 and reg[2] and reg[2] > 10000:
                         nao_contabilizados.append((data_str, reg[2]))
