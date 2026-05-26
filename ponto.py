@@ -1123,9 +1123,11 @@ class PicaPonto(commands.Cog):
 
     @commands.slash_command(name="pontosreg", description='Verifica todo os pica-pontos salvos na base de dados de uma pessoa.', contexts={discord.InteractionContextType.guild}, default_member_permissions=None)
     async def consultar_ponto(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=False)):
-        cargo_ponto = ctx.guild.get_role(int(config['ponto_role_id']))
-        if cargo_ponto not in ctx.author.roles:
-            return await ctx.respond('❌ Não tens permissão para usar este comando.', ephemeral=True)
+        ponto_id = config.get('ponto_role_id')
+        cargo_ponto = ctx.guild.get_role(int(ponto_id)) if ponto_id else None
+        if not cargo_ponto or cargo_ponto not in ctx.author.roles:
+            cargo_ponto_name = cargo_ponto.name if cargo_ponto else "Não encontrado no servidor"
+            return await ctx.respond(f'❌ Não tens permissão para usar este comando.\n> **Cargo de Ponto Configurado (ID):** `{ponto_id}` | **Nome na Guilda:** `{cargo_ponto_name}`', ephemeral=True)
         if usuario is None:
             usuario = ctx.author
             
@@ -1235,9 +1237,13 @@ class PicaPonto(commands.Cog):
 
     @commands.slash_command(name="ponto", description='Inicia o seu pica-ponto', contexts={discord.InteractionContextType.guild}, default_member_permissions=None)
     async def bateponto(self, ctx: discord.ApplicationContext):
-        cargo_ponto = ctx.guild.get_role(int(config['ponto_role_id']))
-        if cargo_ponto not in ctx.author.roles:
-            return await ctx.respond('❌ Não tens permissão para usar o pica-ponto.', ephemeral=True)
+        ponto_id = config.get('ponto_role_id')
+        cargo_ponto = ctx.guild.get_role(int(ponto_id)) if ponto_id else None
+        if not cargo_ponto or cargo_ponto not in ctx.author.roles:
+            role_names = [r.name for r in ctx.author.roles]
+            cargo_ponto_name = cargo_ponto.name if cargo_ponto else "Não encontrado no servidor"
+            print(f"[DEBUG] /ponto recusado. ID: {ponto_id} ({cargo_ponto_name}). Cargos do usuário: {role_names}")
+            return await ctx.respond(f'❌ Não tens permissão para usar o pica-ponto.\n> **Cargo de Ponto Configurado (ID):** `{ponto_id}` | **Nome na Guilda:** `{cargo_ponto_name}`', ephemeral=True)
         if ctx.user.id in active_pontos:
             estado = active_pontos[ctx.user.id]
             try:
