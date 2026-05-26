@@ -299,18 +299,18 @@ class PicaPonto(commands.Cog):
 
                     letra_correta = patente_atual_info["letra"]
                     try:
-                        ext_letra = callsign.split('-')[0] if callsign else ""
+                        ext_letra = callsign.split('-')[0] if (callsign and '-' in callsign) else ""
                     except:
                         ext_letra = ""
                         
                     callsign_is_taken = any(f[2] == callsign for f in funcionarios_db) if callsign else False
                     
-                    if not callsign or ext_letra != letra_correta or callsign_is_taken:
+                    if not callsign or (not callsign.isdigit() and (ext_letra != letra_correta or callsign_is_taken)):
                         novo_callsign = await db.get_next_callsign(letra_correta)
                         await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome)
                         
                         try:
-                            await member.edit(nick=f"[{novo_callsign}] {nome}")
+                            await member.edit(nick=nome)
                         except:
                             pass
                             
@@ -326,6 +326,10 @@ class PicaPonto(commands.Cog):
                                 await log_canal.send(embed=embed_log)
                     else:
                         await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
+                        try:
+                            await member.edit(nick=nome)
+                        except:
+                            pass
                         
                         log_canal_id = config.get("log_contratacoes_id")
                         if log_canal_id:
@@ -339,6 +343,15 @@ class PicaPonto(commands.Cog):
                                 await log_canal.send(embed=embed_log)
                 else:
                     velho_callsign = func_db[2]
+                    if velho_callsign and velho_callsign.isdigit():
+                        await db.add_funcionario(member.id, patente_atual_key, velho_callsign, func_db[3])
+                        nick_esperado = func_db[3]
+                        if member.display_name != nick_esperado:
+                            try:
+                                await member.edit(nick=nick_esperado)
+                            except:
+                                pass
+                        continue
                     try:
                         velha_letra, velho_num_str = velho_callsign.split('-')
                         velho_num = int(velho_num_str)
@@ -357,12 +370,12 @@ class PicaPonto(commands.Cog):
                         for s_user_id, s_novo_callsign, s_nome in shifted_users:
                             try:
                                 s_member = guild.get_member(s_user_id) or await guild.fetch_member(s_user_id)
-                                await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+                                await s_member.edit(nick=s_nome)
                             except:
                                 pass
                         
                         try:
-                            await member.edit(nick=f"[{novo_callsign}] {nome_func}")
+                            await member.edit(nick=nome_func)
                         except:
                             pass
                             
@@ -377,7 +390,7 @@ class PicaPonto(commands.Cog):
                                 )
                                 await log_canal.send(embed=embed_log)
                     else:
-                        nick_esperado = f"[{velho_callsign}] {func_db[3]}"
+                        nick_esperado = func_db[3]
                         if member.display_name != nick_esperado:
                             try:
                                 await member.edit(nick=nick_esperado)
@@ -420,7 +433,7 @@ class PicaPonto(commands.Cog):
             for user_id, valor in dados['funcionarios']:
                 func = await db.get_funcionario(user_id)
                 if func:
-                    nome_exib = f"[{func[1]}] {func[2]}"
+                    nome_exib = func[2]
                 else:
                     membro = self.client.get_user(user_id)
                     nome_exib = membro.display_name if membro else f"ID: {user_id}"
@@ -582,7 +595,7 @@ class PicaPonto(commands.Cog):
             except discord.Forbidden:
                 return await ctx.followup.send("❌ Não tenho permissão para adicionar os cargos. O meu cargo precisa estar acima dos cargos que estou tentando adicionar.")
                 
-        novo_nick = f"[{callsign}] {nome}"
+        novo_nick = nome
         try:
             await usuario.edit(nick=novo_nick)
         except discord.Forbidden:
@@ -665,15 +678,21 @@ class PicaPonto(commands.Cog):
         except discord.Forbidden:
             pass
             
-        velha_letra, velho_num = func[1].split('-')
-        velho_num = int(velho_num)
+        if func[1] and '-' in func[1]:
+            velha_letra, velho_num = func[1].split('-')
+            try:
+                velho_num = int(velho_num)
+            except ValueError:
+                velho_num = 0
+        else:
+            velha_letra, velho_num = "", 0
         await db.remove_funcionario(usuario.id)
         
         shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
         for s_user_id, s_novo_callsign, s_nome in shifted_users:
             try:
                 s_member = ctx.guild.get_member(s_user_id) or await ctx.guild.fetch_member(s_user_id)
-                await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+                await s_member.edit(nick=s_nome)
             except:
                 pass
         
@@ -736,7 +755,7 @@ class PicaPonto(commands.Cog):
             
         novo_callsign = await db.get_next_callsign(nova_patente_info["letra"])
         
-        novo_nick = f"[{novo_callsign}] {nome_func}"
+        novo_nick = nome_func
         try:
             await usuario.edit(nick=novo_nick)
         except discord.Forbidden:
@@ -755,7 +774,7 @@ class PicaPonto(commands.Cog):
         for s_user_id, s_novo_callsign, s_nome in shifted_users:
             try:
                 s_member = ctx.guild.get_member(s_user_id) or await ctx.guild.fetch_member(s_user_id)
-                await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+                await s_member.edit(nick=s_nome)
             except:
                 pass
         
@@ -780,7 +799,7 @@ class PicaPonto(commands.Cog):
     async def editar_funcionario(self, ctx: discord.ApplicationContext,
                        usuario: Option(discord.Member, 'Selecione o funcionário', required=True),
                        motivo: Option(str, 'Motivo da alteração manual', required=True),
-                       novo_callsign: Option(str, 'Digite o novo callsign (ex: W-01) - Deixe em branco para não alterar', required=False, default=None),
+                       novo_callsign: Option(str, 'Digite o novo número de funcionário (ex: 1001) - Deixe em branco para não alterar', required=False, default=None),
                        novo_nome: Option(str, 'Digite o novo nome - Deixe em branco para não alterar', required=False, default=None),
                        novo_cargo: Option(str, 'Selecione o novo cargo - Deixe em branco para não alterar', choices=[discord.OptionChoice(name=v.get('nome', k.replace('_', ' ').title()), value=k) for k, v in config.get("cargos_patentes", {}).items()], required=False, default=None)):
         
@@ -836,7 +855,7 @@ class PicaPonto(commands.Cog):
         
         await db.add_funcionario(usuario.id, final_patente, final_callsign, final_nome)
         
-        novo_nick = f"[{final_callsign}] {final_nome}"
+        novo_nick = final_nome
         try:
             await usuario.edit(nick=novo_nick)
         except discord.Forbidden:
@@ -1011,20 +1030,20 @@ class PicaPonto(commands.Cog):
 
                 letra_correta = patente_atual_info["letra"]
                 try:
-                    ext_letra = callsign.split('-')[0] if callsign else ""
+                    ext_letra = callsign.split('-')[0] if (callsign and '-' in callsign) else ""
                 except:
                     ext_letra = ""
                     
                 callsign_is_taken = any(f[2] == callsign for f in funcionarios_db) if callsign else False
                 
-                if not callsign or ext_letra != letra_correta or callsign_is_taken:
+                if not callsign or (not callsign.isdigit() and (ext_letra != letra_correta or callsign_is_taken)):
                     novo_callsign = await db.get_next_callsign(letra_correta)
                     await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome)
                     registrados += 1
                     corrigidos += 1
                     
                     try:
-                        await member.edit(nick=f"[{novo_callsign}] {nome}")
+                        await member.edit(nick=nome)
                     except:
                         pass
                         
@@ -1041,6 +1060,10 @@ class PicaPonto(commands.Cog):
                 else:
                     await db.add_funcionario(member.id, patente_atual_key, callsign, nome)
                     registrados += 1
+                    try:
+                        await member.edit(nick=nome)
+                    except:
+                        pass
                     
                     log_canal_id = config.get("log_contratacoes_id")
                     if log_canal_id:
@@ -1054,6 +1077,15 @@ class PicaPonto(commands.Cog):
                             await log_canal.send(embed=embed_log)
             else:
                 velho_callsign = func_db[2]
+                if velho_callsign and velho_callsign.isdigit():
+                    await db.add_funcionario(member.id, patente_atual_key, velho_callsign, func_db[3])
+                    nick_esperado = func_db[3]
+                    if member.display_name != nick_esperado:
+                        try:
+                            await member.edit(nick=nick_esperado)
+                        except:
+                            pass
+                    continue
                 try:
                     velha_letra, velho_num_str = velho_callsign.split('-')
                     velho_num = int(velho_num_str)
@@ -1064,7 +1096,7 @@ class PicaPonto(commands.Cog):
                     nome_func = func_db[3]
                     await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome_func)
                     try:
-                        await member.edit(nick=f"[{novo_callsign}] {nome_func}")
+                        await member.edit(nick=nome_func)
                     except:
                         pass
                     corrigidos += 1
@@ -1082,12 +1114,12 @@ class PicaPonto(commands.Cog):
                     for s_user_id, s_novo_callsign, s_nome in shifted_users:
                         try:
                             s_member = guild.get_member(s_user_id) or await guild.fetch_member(s_user_id)
-                            await s_member.edit(nick=f"[{s_novo_callsign}] {s_nome}")
+                            await s_member.edit(nick=s_nome)
                         except:
                             pass
                     
                     try:
-                        await member.edit(nick=f"[{novo_callsign}] {nome_func}")
+                        await member.edit(nick=nome_func)
                     except:
                         pass
                         
@@ -1104,7 +1136,7 @@ class PicaPonto(commands.Cog):
                             )
                             await log_canal.send(embed=embed_log)
                 else:
-                    nick_esperado = f"[{velho_callsign}] {func_db[3]}"
+                    nick_esperado = func_db[3]
                     if member.display_name != nick_esperado:
                         try:
                             await member.edit(nick=nick_esperado)
@@ -1219,7 +1251,7 @@ class PicaPonto(commands.Cog):
             func_db = await db.get_funcionario(user[0])
             pagamento_str = ""
             if func_db:
-                nome_exib = f"[{func_db[1]}] {func_db[2]}"
+                nome_exib = func_db[2]
                 patente_info = config.get("cargos_patentes", {}).get(func_db[0])
                 if patente_info:
                     valor_hora = patente_info.get("valor_hora", 0)
@@ -1737,7 +1769,7 @@ class BotoesSemana(View):
 
                 func_db = await db.get_funcionario(user_id)
                 if func_db:
-                    nome_exib = f"[{func_db[1]}] {func_db[2]}"
+                    nome_exib = func_db[2]
                 else:
                     membro = inter.guild.get_member(user_id)
                     nome_exib = membro.display_name if membro else f"ID: {user_id}"

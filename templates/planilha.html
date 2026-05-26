@@ -16,7 +16,7 @@
                     <thead>
                         <tr>
                             <th style="width: 60px; text-align: center;"><i class="fas fa-image"></i></th>
-                            <th><i class="fas fa-id-badge"></i> Callsign</th>
+                            <th><i class="fas fa-id-badge"></i> Nº Func.</th>
                             <th><i class="fas fa-user"></i> Nome</th>
                             <th><i class="fas fa-briefcase"></i> Cargo</th>
                             <th><i class="fas fa-clock"></i> Horas na Semana</th>
@@ -30,7 +30,7 @@
                             <td style="text-align: center;">
                                 <img src="{{ f.user_id | get_avatar }}" class="avatar-table" style="width: 2rem; height: 2rem;" alt="Avatar">
                             </td>
-                            <td><span class="badge">{{ f.callsign }}</span></td>
+                            <td><span class="badge">#{{ f.callsign }}</span></td>
                             <td style="font-weight: 600;">{{ f.nome }}</td>
                             <td style="color: var(--text-secondary);">{{ f.patente_nome }}</td>
                             <td>

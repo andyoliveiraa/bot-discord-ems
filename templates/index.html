@@ -77,7 +77,7 @@
       <h3><i class="fas fa-trophy highlight"></i> Top 10 da Semana</h3>
       <div class="table-container">
         <table class="modern-table">
-          <thead><tr><th>Pos.</th><th>Avatar</th><th>Callsign</th><th>Nome</th><th>Tempo</th></tr></thead>
+          <thead><tr><th>Pos.</th><th>Avatar</th><th>Nº Func.</th><th>Nome</th><th>Tempo</th></tr></thead>
           <tbody>
             {% for r in ranking %}
             <tr>
@@ -85,7 +85,7 @@
               <td>
                 <img src="{{ r.user_id | get_avatar }}" class="avatar-table" alt="Avatar">
               </td>
-              <td><span class="badge">{{ r.callsign }}</span></td>
+              <td><span class="badge">#{{ r.callsign }}</span></td>
               <td>{{ r.nome }}</td>
               <td>{{ r.tempo }}</td>
             </tr>

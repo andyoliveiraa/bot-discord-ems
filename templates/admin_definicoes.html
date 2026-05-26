@@ -40,7 +40,7 @@
         <div class="table-container">
           <table class="modern-table">
             <thead>
-              <tr><th><i class="fas fa-image"></i> Avatar</th><th><i class="fas fa-id-badge"></i> Callsign</th><th><i class="fas fa-user"></i> Nome</th><th><i class="fas fa-briefcase"></i> Patente</th><th><i class="fas fa-clock"></i> Horas Semana</th><th><i class="fas fa-euro-sign"></i> A Receber</th><th><i class="fas fa-tools"></i> Ações</th></tr>
+              <tr><th><i class="fas fa-image"></i> Avatar</th><th><i class="fas fa-id-badge"></i> Nº Func.</th><th><i class="fas fa-user"></i> Nome</th><th><i class="fas fa-briefcase"></i> Patente</th><th><i class="fas fa-clock"></i> Horas Semana</th><th><i class="fas fa-euro-sign"></i> A Receber</th><th><i class="fas fa-tools"></i> Ações</th></tr>
             </thead>
             <tbody>
               {% for f in func_list %}
@@ -48,7 +48,7 @@
                 <td>
                   <img src="{{ f.user_id | get_avatar }}" class="avatar-table" alt="Avatar">
                 </td>
-                <td><span class="badge">{{ f.callsign }}</span></td>
+                <td><span class="badge">#{{ f.callsign }}</span></td>
                 <td>{{ f.nome }}</td>
                 <td>{{ f.patente_nome }}</td>
                 <td>{{ f.horas }}h {{ f.minutos }}m</td>
@@ -157,7 +157,7 @@
                     <img src="{{ pag.user_id | get_avatar }}" class="avatar-table" alt="Avatar">
                     <div>
                       {% if pag.callsign %}
-                      <span style="display:block;font-size:1rem;"><strong>[{{ pag.callsign }}]</strong> {{ pag.nome }}</span>
+                      <span style="display:block;font-size:1rem;"><strong>#{{ pag.callsign }}</strong> - {{ pag.nome }}</span>
                       {% else %}
                       <span style="display:block;font-size:1rem;">{{ pag.nome }}</span>
                       {% endif %}

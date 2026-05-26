@@ -240,29 +240,34 @@ class Database:
                 await cursor.execute('SELECT user_id, patente_id, callsign, nome FROM funcionarios ORDER BY callsign ASC')
                 return await cursor.fetchall()
 
-    async def get_next_callsign(self, letra: str) -> str:
+    async def get_next_callsign(self, letra: str = None) -> str:
         async with aiosqlite.connect(self.connector) as conn:
             async with conn.cursor() as cursor:
-                await cursor.execute(
-                    'SELECT callsign FROM funcionarios WHERE callsign LIKE ? ORDER BY callsign ASC', (f'{letra}-%',))
+                await cursor.execute('SELECT callsign FROM funcionarios')
                 rows = await cursor.fetchall()
                 numeros_existentes = []
                 for row in rows:
                     try:
-                        num = int(row[0].split('-')[1])
+                        num = int(row[0])
                         numeros_existentes.append(num)
                     except Exception:
                         pass
+                if not numeros_existentes:
+                    return "1001"
                 numeros_existentes.sort()
-                proximo = 1
+                proximo = 1001
                 for num in numeros_existentes:
+                    if num < 1001:
+                        continue
                     if num == proximo:
                         proximo += 1
                     elif num > proximo:
                         break
-                return f"{letra}-{str(proximo).zfill(2)}"
+                return str(proximo)
 
     async def shift_callsigns_down(self, letra: str, removido_num: int):
+        if not letra:
+            return []
         async with aiosqlite.connect(self.connector) as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
