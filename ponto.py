@@ -531,7 +531,7 @@ class PicaPonto(commands.Cog):
             cargos_para_adicionar.append(cargo_patente)
             
         if cargo_equipa_id:
-            cargo_equipa = ctx.guild.get_role(cargo_equipa_id)
+            cargo_equipa = ctx.guild.get_role(int(cargo_equipa_id))
             if cargo_equipa:
                 cargos_para_adicionar.append(cargo_equipa)
                 
@@ -609,7 +609,7 @@ class PicaPonto(commands.Cog):
                 
         cargo_equipa_id = config.get("cargo_equipa_id")
         if cargo_equipa_id:
-            cargo_equipa = ctx.guild.get_role(cargo_equipa_id)
+            cargo_equipa = ctx.guild.get_role(int(cargo_equipa_id))
             if cargo_equipa:
                 cargos_para_remover.append(cargo_equipa)
                 
@@ -1077,7 +1077,7 @@ class PicaPonto(commands.Cog):
     async def semana(self, ctx: discord.ApplicationContext):
         top_todos = await db.get_ranking(amount=100)
         # Filtrar apenas quem tem o cargo ponto_role_id
-        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        cargo_ponto = ctx.guild.get_role(int(config['ponto_role_id']))
         top_filtrado = [u for u in top_todos if cargo_ponto and ctx.guild.get_member(u[0]) and cargo_ponto in ctx.guild.get_member(u[0]).roles]
         agora_str = datetime.datetime.now(obter_timezone()).strftime('%d/%m/%Y \u00e0s %H:%M')
 
@@ -1100,7 +1100,7 @@ class PicaPonto(commands.Cog):
     @has_staff_role()
     async def resetarsemana(self, ctx: discord.ApplicationContext):
         top_todos = await db.get_ranking(amount=100)
-        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        cargo_ponto = ctx.guild.get_role(int(config['ponto_role_id']))
         top_filtrado = [u for u in top_todos if cargo_ponto and ctx.guild.get_member(u[0]) and cargo_ponto in ctx.guild.get_member(u[0]).roles]
         agora_str = datetime.datetime.now(obter_timezone()).strftime('%d/%m/%Y \u00e0s %H:%M')
 
@@ -1123,7 +1123,7 @@ class PicaPonto(commands.Cog):
 
     @commands.slash_command(name="pontosreg", description='Verifica todo os pica-pontos salvos na base de dados de uma pessoa.', contexts={discord.InteractionContextType.guild}, default_member_permissions=None)
     async def consultar_ponto(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=False)):
-        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        cargo_ponto = ctx.guild.get_role(int(config['ponto_role_id']))
         if cargo_ponto not in ctx.author.roles:
             return await ctx.respond('❌ Não tens permissão para usar este comando.', ephemeral=True)
         if usuario is None:
@@ -1235,7 +1235,7 @@ class PicaPonto(commands.Cog):
 
     @commands.slash_command(name="ponto", description='Inicia o seu pica-ponto', contexts={discord.InteractionContextType.guild}, default_member_permissions=None)
     async def bateponto(self, ctx: discord.ApplicationContext):
-        cargo_ponto = ctx.guild.get_role(config['ponto_role_id'])
+        cargo_ponto = ctx.guild.get_role(int(config['ponto_role_id']))
         if cargo_ponto not in ctx.author.roles:
             return await ctx.respond('❌ Não tens permissão para usar o pica-ponto.', ephemeral=True)
         if ctx.user.id in active_pontos:
@@ -1392,7 +1392,7 @@ class finalizarPonto(View):
 
     @discord.ui.button(label='Pausar', emoji='⏸️', style=discord.ButtonStyle.secondary, custom_id="button_pause")
     async def pause_callback(self, button, inter: discord.Interaction):
-        cargo_adm = inter.guild.get_role(config["staff_role_id"]) if inter.guild else None
+        cargo_adm = inter.guild.get_role(int(config["staff_role_id"])) if inter.guild else None
         is_staff = cargo_adm in inter.user.roles if cargo_adm and hasattr(inter.user, "roles") else False
         
         target_user_id = None
@@ -1470,7 +1470,7 @@ class finalizarPonto(View):
 
     @discord.ui.button(label='Finalizar', emoji='⏹', style=discord.ButtonStyle.danger, custom_id="button_end")
     async def end_callback(self, button, inter: discord.Interaction):
-        cargo_adm = inter.guild.get_role(config["staff_role_id"])
+        cargo_adm = inter.guild.get_role(int(config["staff_role_id"]))
         
         if cargo_adm in inter.user.roles:
             for user_id, estado in list(active_pontos.items()):
