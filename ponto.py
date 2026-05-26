@@ -314,6 +314,16 @@ class PicaPonto(commands.Cog):
                         except:
                             pass
                             
+                        try:
+                            await member.send(
+                                f'**<:aviso:1269036173381206132> AVISO: Registro Automático Efetuado!**\n'
+                                f'Você foi registrado(a) automaticamente no sistema de ponto da corporação.\n\n'
+                                f'**→ Seu Número de Funcionário:** `{novo_callsign}`\n'
+                                f'*(Para definir a sua senha de acesso ao Painel Web, utilize o comando `/reset_password` no Discord ou fale com a Direção).*'
+                            )
+                        except:
+                            pass
+                            
                         log_canal_id = config.get("log_contratacoes_id")
                         if log_canal_id:
                             log_canal = guild.get_channel(int(log_canal_id))
@@ -365,6 +375,16 @@ class PicaPonto(commands.Cog):
                         nome_func = func_db[3]
                         
                         await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome_func)
+                        
+                        try:
+                            await member.send(
+                                f'**<:aviso:1269036173381206132> AVISO: Seu Identificador foi Atualizado!**\n'
+                                f'O seu antigo indicativo (`{velho_callsign}`) foi atualizado para o seu novo **Número de Funcionário** permanente do sistema.\n\n'
+                                f'**→ Novo Número de Funcionário:** `{novo_callsign}`\n'
+                                f'*(Utilize este novo número `{novo_callsign}` para aceder ao Painel Web a partir de agora).*'
+                            )
+                        except:
+                            pass
                         
                         shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
                         for s_user_id, s_novo_callsign, s_nome in shifted_users:
@@ -617,11 +637,11 @@ class PicaPonto(commands.Cog):
             msg_dm = (
                 f'**<:aviso:1269036173381206132> AVISO!** Você foi contratado(a) e registrado(a) no sistema!\n'
                 f'**→ Staff:** {ctx.author.mention}\n**→ Patente:** {patente_info["nome"]}\n'
-                f'**→ Callsign:** `{callsign}`\n**→ Motivo:** {motivo}\n\n'
+                f'**→ Número de Funcionário:** `#{callsign}`\n**→ Motivo:** {motivo}\n\n'
                 f'**🌐 Dashboard Online:**\n'
                 f'O seu acesso ao painel já está disponível!\n'
                 f'**Painel:** `https://ems.discloud.app`\n'
-                f'**Username:** `{callsign}`\n'
+                f'**Número de Funcionário:** `{callsign}`\n'
                 f'**Senha Provisória:** `{senha_temp}`\n'
                 f'*(Recomendamos que você altere sua senha no primeiro acesso através de "Esqueci a Palavra-Passe" ou do link abaixo:)*\n'
                 f'`https://ems.discloud.app/reset_password/{reset_token}`'
@@ -863,7 +883,7 @@ class PicaPonto(commands.Cog):
             
         desc_alteracoes = []
         if novo_callsign:
-            desc_alteracoes.append(f"**Callsign:** `{callsign_antigo}` ➔ `{final_callsign}`")
+            desc_alteracoes.append(f"**Nº Funcionário:** `{callsign_antigo}` ➔ `{final_callsign}`")
         if novo_nome:
             desc_alteracoes.append(f"**Nome:** `{nome_antigo}` ➔ `{final_nome}`")
         if novo_cargo:
@@ -880,7 +900,7 @@ class PicaPonto(commands.Cog):
                 f'**→ Alterações:**\n'
                 f'{desc_alteracoes_str}\n'
                 f'**→ Motivo:** {motivo}\n\n'
-                f'*Nota: Se o seu Callsign foi alterado, utilize o seu novo Callsign `{final_callsign}` para aceder ao Painel Web (a sua palavra-passe permanece inalterada).*'
+                f'*Nota: Se o seu Número de Funcionário foi alterado, utilize o seu novo número `{final_callsign}` para aceder ao Painel Web (a sua palavra-passe permanece inalterada).*'
             )
             await usuario.send(msg_dm)
         except (discord.HTTPException, discord.Forbidden):
@@ -1095,6 +1115,17 @@ class PicaPonto(commands.Cog):
                     novo_callsign = await db.get_next_callsign(letra_correta)
                     nome_func = func_db[3]
                     await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome_func)
+                    
+                    try:
+                        await member.send(
+                            f'**<:aviso:1269036173381206132> AVISO: Seu Identificador foi Atualizado!**\n'
+                            f'O seu antigo indicativo inválido (`{velho_callsign}`) foi corrigido para o seu novo **Número de Funcionário** permanente do sistema.\n\n'
+                            f'**→ Novo Número de Funcionário:** `{novo_callsign}`\n'
+                            f'*(Utilize este novo número `{novo_callsign}` para aceder ao Painel Web a partir de agora).*'
+                        )
+                    except:
+                        pass
+                        
                     try:
                         await member.edit(nick=nome_func)
                     except:
@@ -1109,6 +1140,16 @@ class PicaPonto(commands.Cog):
                     nome_func = func_db[3]
                     
                     await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome_func)
+                    
+                    try:
+                        await member.send(
+                            f'**<:aviso:1269036173381206132> AVISO: Seu Identificador foi Atualizado!**\n'
+                            f'O seu antigo indicativo (`{velho_callsign}`) foi atualizado para o seu novo **Número de Funcionário** permanente do sistema.\n\n'
+                            f'**→ Novo Número de Funcionário:** `{novo_callsign}`\n'
+                            f'*(Utilize este novo número `{novo_callsign}` para aceder ao Painel Web a partir de agora).*'
+                        )
+                    except:
+                        pass
                     
                     shifted_users = await db.shift_callsigns_down(velha_letra, velho_num)
                     for s_user_id, s_novo_callsign, s_nome in shifted_users:

@@ -75,17 +75,17 @@ O sistema baseia-se num ficheiro `config.json` e num ficheiro de base de dados S
 - `/reset_password` — Redefine a sua própria senha de acesso à Web Dashboard.
 
 ### Comandos Staff
-- `/contratar @user [patente] [nome] [motivo]` — Registra um novo funcionário, cria callsign e gera senha web.
-- `/promover @user [nova_patente] [motivo]` — Altera a patente, o callsign e os cargos Discord associados.
-- `/editar_funcionario @user [motivo] [novo_callsign] [novo_nome] [novo_cargo]` — Altera manualmente o indicativo (callsign), nome e/ou cargo de um funcionário.
+- `/contratar @user [patente] [nome] [motivo]` — Registra um novo funcionário, atribui número de funcionário e gera senha web.
+- `/promover @user [nova_patente] [motivo]` — Altera a patente e os cargos Discord associados.
+- `/editar_funcionario @user [motivo] [novo_callsign] [novo_nome] [novo_cargo]` — Altera manualmente o número de funcionário, nome e/ou cargo de um funcionário.
 - `/despedir @user [motivo]` — Remove o funcionário da corporação e retira os seus cargos.
 - `/addtempo @user [horas] [minutos] [motivo]` — Adiciona tempo manual a um funcionário.
 - `/deltempo @user [horas] [minutos] [motivo]` — Remove tempo manual de um funcionário.
 - `/pontosreg @user` — Consulta o histórico detalhado de registos de um utilizador nesta semana.
 - `/resetarsemana` — Gera PDF, faz backup e encerra a semana (gera dívidas a pagar no dashboard).
 - `/semana` — Apenas visualiza o relatório PDF atual de pagamentos sem encerrar a semana ativa.
-- `/ranking` — Top 10 de horas trabalhadas na semana atual (exibe Callsign e Nome).
-- `/autocorrecao` — Força a auto-correção de apelidos (Callsigns) e nomes de todos os membros do Discord conforme os registos da base de dados.
+- `/ranking` — Top 10 de horas trabalhadas na semana atual (exibe Nº Func. e Nome).
+- `/autocorrecao` — Força a auto-correção de nomes e apelidos de todos os membros do Discord conforme os registos da base de dados (removendo siglas e callsigns dos nicks no Discord).
 - `/resetarsenha @user` — Gera um novo link de redefinição de senha para o Dashboard em nome da Direção.
 - `/resetar_todos` — Painel interativo para limpar e apagar dados gerais (usar com cuidado).
 

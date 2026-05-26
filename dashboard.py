@@ -965,13 +965,31 @@ async def api_promover(uid):
                 pass
             break
 
-    novo_callsign = await db.get_next_callsign(nova_patente_info['letra'])
-    velha_letra = func[1].split('-')[0] if func[1] and '-' in func[1] else ''
-    velho_num = int(func[1].split('-')[1]) if func[1] and '-' in func[1] else 0
+    if func[1] and func[1].isdigit():
+        novo_callsign = func[1]
+        await db.add_funcionario(uid, nova_patente, novo_callsign, nome_func)
+    else:
+        novo_callsign = await db.get_next_callsign(nova_patente_info['letra'])
+        velha_letra = func[1].split('-')[0] if func[1] and '-' in func[1] else ''
+        velho_num = int(func[1].split('-')[1]) if func[1] and '-' in func[1] else 0
 
-    await db.add_funcionario(uid, nova_patente, novo_callsign, nome_func)
-    if velha_letra:
-        await db.shift_callsigns_down(velha_letra, velho_num)
+        await db.add_funcionario(uid, nova_patente, novo_callsign, nome_func)
+        if velha_letra:
+            await db.shift_callsigns_down(velha_letra, velho_num)
+
+        # Envia DM alertando que o número mudou do antigo indicativo de letra para permanente
+        if bot:
+            try:
+                user = bot.get_user(uid) or await bot.fetch_user(uid)
+                if user:
+                    await user.send(
+                        f'**<:aviso:1269036173381206132> AVISO: Seu Identificador foi Atualizado!**\n'
+                        f'O seu antigo indicativo (`{func[1]}`) foi atualizado para o seu novo **Número de Funcionário** permanente do sistema.\n\n'
+                        f'**→ Novo Número de Funcionário:** `{novo_callsign}`\n'
+                        f'*(Utilize este novo número `{novo_callsign}` para aceder ao Painel Web a partir de agora).*'
+                    )
+            except Exception:
+                pass
 
     return jsonify({'ok': True, 'novo_callsign': novo_callsign})
 
