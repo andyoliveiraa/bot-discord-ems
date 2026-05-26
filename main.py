@@ -1,6 +1,14 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
+# Sincronizar e validar as configurações antes de carregá-las
+try:
+    from setup_config import setup
+    setup()
+except Exception as e:
+    print(f"[AVISO] Falha ao executar o setup automático de configurações: {e}")
+
 import asyncio
 import aiohttp
 from itertools import cycle
