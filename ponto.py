@@ -235,7 +235,7 @@ class PicaPonto(commands.Cog):
                 patente_atual_key = None
                 patente_atual_info = None
                 for p_key, p_info in config.get("cargos_patentes", {}).items():
-                    if p_info.get("id") and any(r.id == p_info["id"] for r in member.roles):
+                    if p_info.get("id") and any(r.id == int(p_info["id"]) for r in member.roles):
                         patente_atual_key = p_key
                         patente_atual_info = p_info
                         break
@@ -520,7 +520,7 @@ class PicaPonto(commands.Cog):
         
         patente_info = config["cargos_patentes"][patente]
         letra = patente_info["letra"]
-        cargo_patente_id = patente_info["id"]
+        cargo_patente_id = int(patente_info["id"])
         cargo_equipa_id = config.get("cargo_equipa_id")
         
         callsign = await db.get_next_callsign(letra)
@@ -603,7 +603,7 @@ class PicaPonto(commands.Cog):
         
         cargos_para_remover = []
         if patente_info:
-            cargo_patente = ctx.guild.get_role(patente_info["id"])
+            cargo_patente = ctx.guild.get_role(int(patente_info["id"]))
             if cargo_patente:
                 cargos_para_remover.append(cargo_patente)
                 
@@ -676,12 +676,12 @@ class PicaPonto(commands.Cog):
         
         cargos_para_remover = []
         if patente_antiga_info:
-            cargo_antigo = ctx.guild.get_role(patente_antiga_info["id"])
+            cargo_antigo = ctx.guild.get_role(int(patente_antiga_info["id"]))
             if cargo_antigo:
                 cargos_para_remover.append(cargo_antigo)
                 
         cargos_para_adicionar = []
-        cargo_novo = ctx.guild.get_role(nova_patente_info["id"])
+        cargo_novo = ctx.guild.get_role(int(nova_patente_info["id"]))
         if cargo_novo:
             cargos_para_adicionar.append(cargo_novo)
             
@@ -771,12 +771,12 @@ class PicaPonto(commands.Cog):
         
         if novo_cargo and patente_antiga_key != novo_cargo:
             if patente_antiga_info:
-                cargo_antigo = ctx.guild.get_role(patente_antiga_info["id"])
+                cargo_antigo = ctx.guild.get_role(int(patente_antiga_info["id"]))
                 if cargo_antigo:
                     cargos_para_remover.append(cargo_antigo)
             
             if nova_patente_info:
-                cargo_novo = ctx.guild.get_role(nova_patente_info["id"])
+                cargo_novo = ctx.guild.get_role(int(nova_patente_info["id"]))
                 if cargo_novo:
                     cargos_para_adicionar.append(cargo_novo)
                     
@@ -925,7 +925,7 @@ class PicaPonto(commands.Cog):
             patente_atual_key = None
             patente_atual_info = None
             for p_key, p_info in config.get("cargos_patentes", {}).items():
-                if p_info.get("id") and any(r.id == p_info["id"] for r in member.roles):
+                if p_info.get("id") and any(r.id == int(p_info["id"]) for r in member.roles):
                     patente_atual_key = p_key
                     patente_atual_info = p_info
                     break

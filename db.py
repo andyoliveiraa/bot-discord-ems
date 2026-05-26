@@ -659,11 +659,13 @@ def get_configs():
             except Exception as e:
                 print(f"[GET_CONFIGS] Erro ao converter {env_key} para {cast_type}: {e}")
                 
-    # Variável de ambiente especial para cargos_patentes como JSON string
     cargos_env = os.getenv("CARGOS_PATENTES")
     if cargos_env is not None and cargos_env.strip() != "":
         try:
-            parsed = json.loads(cargos_env.strip())
+            val_clean = cargos_env.strip()
+            if (val_clean.startswith("'") and val_clean.endswith("'")) or (val_clean.startswith('"') and val_clean.endswith('"')):
+                val_clean = val_clean[1:-1].strip()
+            parsed = json.loads(val_clean)
             if isinstance(parsed, dict):
                 configs["cargos_patentes"] = parsed
                 print("[GET_CONFIGS] Configuração cargos_patentes carregada com sucesso do .env")

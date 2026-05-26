@@ -859,7 +859,7 @@ async def api_admin_func_action(uid):
             for p_info in cargos_patentes.values():
                 role_id = p_info.get('id')
                 if role_id:
-                    role = guild.get_role(role_id)
+                    role = guild.get_role(int(role_id))
                     if role and role in member.roles:
                         try: await member.remove_roles(role)
                         except: pass
@@ -885,8 +885,8 @@ async def api_admin_func_action(uid):
             old_role_id = cargos_patentes.get(func[0], {}).get('id')
             new_role_id = cargos_patentes.get(new_patente, {}).get('id')
             
-            old_role = guild.get_role(old_role_id) if old_role_id else None
-            new_role = guild.get_role(new_role_id) if new_role_id else None
+            old_role = guild.get_role(int(old_role_id)) if old_role_id else None
+            new_role = guild.get_role(int(new_role_id)) if new_role_id else None
             
             if old_role and old_role in member.roles:
                 try: await member.remove_roles(old_role)
@@ -955,10 +955,10 @@ async def api_promover(uid):
         if member:
             try:
                 if patente_antiga_info.get('id'):
-                    cargo_old = guild.get_role(patente_antiga_info['id'])
+                    cargo_old = guild.get_role(int(patente_antiga_info['id']))
                     if cargo_old:
                         await member.remove_roles(cargo_old)
-                cargo_new = guild.get_role(nova_patente_info['id'])
+                cargo_new = guild.get_role(int(nova_patente_info['id']))
                 if cargo_new:
                     await member.add_roles(cargo_new)
             except Exception:
@@ -995,12 +995,12 @@ async def api_despedir(uid):
                 try:
                     cargos_rem = []
                     if patente_info.get('id'):
-                        c = guild.get_role(patente_info['id'])
+                        c = guild.get_role(int(patente_info['id']))
                         if c:
                             cargos_rem.append(c)
                     equipa_id = config.get('cargo_equipa_id')
                     if equipa_id:
-                        ce = guild.get_role(equipa_id)
+                        ce = guild.get_role(int(equipa_id))
                         if ce:
                             cargos_rem.append(ce)
                     if cargos_rem:
