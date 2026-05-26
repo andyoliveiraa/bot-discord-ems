@@ -925,6 +925,121 @@ class PicaPonto(commands.Cog):
         )
         await ctx.followup.send(embed=embed)
 
+    @commands.slash_command(name="definir_numero", description='[ADM] Atribui um número a um funcionário. Se ocupado, o antigo proprietário recebe outro.', contexts={discord.InteractionContextType.guild})
+    @has_staff_role()
+    async def definir_numero(self, ctx: discord.ApplicationContext,
+                             usuario: Option(discord.Member, 'Selecione o funcionário', required=True),
+                             novo_numero: Option(str, 'Digite o novo número de funcionário (ex: 1001 ou W-01)', required=True),
+                             motivo: Option(str, 'Motivo da alteração', required=True)):
+        
+        await ctx.defer()
+        
+        func = await db.get_funcionario(usuario.id)
+        if not func:
+            return await ctx.followup.send("❌ Este usuário não está registrado como funcionário no sistema.")
+            
+        patente_antiga_key = func[0]
+        callsign_antigo = func[1]
+        nome_antigo = func[2]
+        
+        if callsign_antigo == novo_numero:
+            return await ctx.followup.send(f"❌ O funcionário {usuario.mention} já possui o número `{novo_numero}`.")
+            
+        # Verificar se o novo número já está em uso por outro funcionário
+        funcionarios_db = await db.get_all_funcionarios()
+        outro_func = next((f for f in funcionarios_db if f[2] and f[2].upper() == novo_numero.upper() and f[0] != usuario.id), None)
+        
+        msg_dm_outros = ""
+        log_outros_desc = ""
+        
+        if outro_func:
+            outro_user_id = outro_func[0]
+            outro_patente = outro_func[1]
+            outro_nome = outro_func[3]
+            
+            # Buscar a letra da patente do outro funcionário para gerar o novo número correto
+            outro_patente_info = config.get("cargos_patentes", {}).get(outro_patente)
+            outro_letra = outro_patente_info.get("letra") if outro_patente_info else None
+            
+            # Temporariamente tirar o callsign do outro usuário no DB para evitar qualquer conflito
+            await db.add_funcionario(outro_user_id, outro_patente, f"TEMP-{outro_user_id}", outro_nome)
+            
+            # Atribuir o novo número ao funcionário atual no DB
+            await db.add_funcionario(usuario.id, patente_antiga_key, novo_numero, nome_antigo)
+            
+            # Gerar o próximo callsign disponível para o outro funcionário
+            outro_novo_numero = await db.get_next_callsign(outro_letra)
+            
+            # Atualizar o outro funcionário no DB com seu novo número
+            await db.add_funcionario(outro_user_id, outro_patente, outro_novo_numero, outro_nome)
+            
+            # Atualizar o nickname no Discord do outro funcionário se possível
+            outro_membro = None
+            try:
+                outro_membro = ctx.guild.get_member(outro_user_id) or await ctx.guild.fetch_member(outro_user_id)
+                if outro_membro:
+                    await outro_membro.edit(nick=outro_nome)
+            except Exception as e:
+                print(f"[DEBUG] Erro ao editar nick do outro membro: {e}")
+                
+            # Enviar DM para o outro funcionário avisando que seu número foi alterado
+            try:
+                if outro_membro:
+                    msg_outro_dm = (
+                        f'**<:aviso:1269036173381206132> AVISO: Seu Identificador foi Atualizado!**\n'
+                        f'O seu número/indicativo antigo (`{novo_numero}`) foi reatribuído a outro funcionário pela Staff.\n\n'
+                        f'**→ Novo Número de Funcionário:** `{outro_novo_numero}`\n'
+                        f'*(Utilize este novo número `{outro_novo_numero}` para aceder ao Painel Web a partir de agora. A sua palavra-passe permanece a mesma).*'
+                    )
+                    await outro_membro.send(msg_outro_dm)
+            except:
+                pass
+                
+            msg_dm_outros = f"\n\n⚠️ O funcionário <@{outro_user_id}> também usava este número e foi atualizado para `{outro_novo_numero}`."
+            log_outros_desc = f"\n**→ Proprietário Anterior:** <@{outro_user_id}> (Novo Nº: `{outro_novo_numero}`)"
+        else:
+            # Apenas atualiza o funcionário atual
+            await db.add_funcionario(usuario.id, patente_antiga_key, novo_numero, nome_antigo)
+            
+        # Atualizar o nickname no Discord do usuário atual
+        try:
+            await usuario.edit(nick=nome_antigo)
+        except Exception as e:
+            print(f"[DEBUG] Erro ao editar nick do usuário atual: {e}")
+            
+        # Enviar DM para o funcionário atual
+        try:
+            msg_dm = (
+                f'**<:aviso:1269036173381206132> AVISO: Seu Identificador foi Atualizado!**\n'
+                f'**→ Staff:** {ctx.author.mention}\n'
+                f'**→ Novo Número de Funcionário:** `{novo_numero}`\n'
+                f'**→ Motivo:** {motivo}\n\n'
+                f'*(Utilize este novo número `{novo_numero}` para aceder ao Painel Web a partir de agora. A sua palavra-passe permanece inalterada).*'
+            )
+            await usuario.send(msg_dm)
+        except (discord.HTTPException, discord.Forbidden):
+            pass
+            
+        # Enviar Log
+        log_canal_id = config.get("log_contratacoes_id")
+        if log_canal_id:
+            log_canal = ctx.guild.get_channel(int(log_canal_id))
+            if log_canal:
+                embed_log = discord.Embed(
+                    title='LOG: Alteração de Número',
+                    description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n**→ `Nº Antigo`: `{callsign_antigo}`**\n**→ `Nº Novo`: `{novo_numero}`**{log_outros_desc}\n**→ `Motivo`: {motivo}**',
+                    colour=discord.Colour.orange()
+                )
+                embed_log.set_author(name='Alteração de número efetuada', icon_url=self.client.user.display_avatar)
+                await log_canal.send(embed=embed_log)
+                
+        embed = discord.Embed(
+            title="✅ Número de Funcionário Definido",
+            description=f"O número de {usuario.mention} foi definido com sucesso para `{novo_numero}` (Antigo: `{callsign_antigo}`).\n\n**Motivo:** {motivo}{msg_dm_outros}",
+            color=discord.Colour.green()
+        )
+        await ctx.followup.send(embed=embed)
+
     @commands.slash_command(description='[ADM] Reseta as horas do pica-ponto de um determinado usuário', contexts={discord.InteractionContextType.guild})
     @has_staff_role()
     async def resetar_usuario(self, ctx: discord.ApplicationContext, usuario: Option(discord.Member, 'Selecione o usuário', required=True)):

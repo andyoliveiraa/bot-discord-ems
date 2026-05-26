@@ -78,6 +78,7 @@ O sistema baseia-se num ficheiro `config.json` e num ficheiro de base de dados S
 - `/contratar @user [patente] [nome] [motivo]` — Registra um novo funcionário, atribui número de funcionário e gera senha web.
 - `/promover @user [nova_patente] [motivo]` — Altera a patente e os cargos Discord associados.
 - `/editar_funcionario @user [motivo] [novo_callsign] [novo_nome] [novo_cargo]` — Altera manualmente o número de funcionário, nome e/ou cargo de um funcionário.
+- `/definir_numero @user [novo_numero] [motivo]` — Atribui diretamente um número de funcionário. Se o número estiver ocupado por outra pessoa, reatribui automaticamente o proprietário anterior para o próximo número livre disponível na sua patente.
 - `/despedir @user [motivo]` — Remove o funcionário da corporação e retira os seus cargos.
 - `/addtempo @user [horas] [minutos] [motivo]` — Adiciona tempo manual a um funcionário.
 - `/deltempo @user [horas] [minutos] [motivo]` — Remove tempo manual de um funcionário.
