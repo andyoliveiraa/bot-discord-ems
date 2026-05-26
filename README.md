@@ -23,7 +23,7 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
 ### 💶 Financeiro, Arquivamento e PDF
 - **Arquivamento Semanal:** Encerra a semana, arquivando todos os pontos e criando registos de pagamento por funcionário.
 - **Controlo de Pagamentos:** Marca funcionários como "Pagos" no dashboard com registo de quem marcou e quando.
-- **Lembretes Diários:** O bot notifica automaticamente os staffs sobre pagamentos pendentes todas as manhãs, com nomes e callsigns (sem IDs numéricos).
+- **Lembretes Diários:** O bot notifica automaticamente os staffs sobre pagamentos pendentes todas as manhãs, com nomes e números de funcionário (sem IDs numéricos).
 - **Relatório PDF Ultra-Detalhado (NOVO):** Disponível em cada semana encerrada no painel admin:
   - Lista todos os turnos individualmente com horários exatos (entrada, saída, pausas)
   - Identifica fechos por Staff (com ID) e turnos não contabilizados
@@ -33,11 +33,12 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
   - Enviado automaticamente para o canal de Logs do Discord ao clicar no botão "PDF Detalhado"
 
 ### 👥 Sistema de RH Integrado
-- **Contratação/Demissão:** Automatização de cargos, callsigns (indicativos) e apelidos no Discord.
+- **Contratação/Demissão:** Automatização de cargos, números de funcionário (identificadores) e apelidos limpos no Discord.
 - **Promoções/Despromoções:** Mudança de patente com registo de motivo e logs.
-- **Callsigns Inteligentes:** Reordenação automática (ex: se W-01 sai, W-02 passa a ser W-01).
+- **Apelidos Limpos no Discord:** O bot mantém o apelido dos membros no Discord estritamente com o seu **Nome**, ocultando siglas antigas para maior profissionalismo.
+- **Números de Funcionário Permanentes:** Atribuição sequencial automática a partir de **`1001`** (ex: `1001`, `1002`, `1003`...), que permanecem fixos ao funcionário (sem reordenação dinâmica ao demitir alguém) e servem para aceder ao painel.
 - **Reset de Senhas:** Gerador de links seguros para acesso ao dashboard, enviado por DM.
-- **Relatórios de Semana:** Nome e callsign do funcionário em vez de IDs numéricos em todos os relatórios e lembretes Discord.
+- **Relatórios de Semana:** Nome e número do funcionário em todos os relatórios e lembretes Discord.
 
 ---
 
