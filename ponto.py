@@ -13,7 +13,39 @@ from werkzeug.security import generate_password_hash
 from db import Database, get_configs
 
 db = Database('db.sqlite3')
-config = get_configs()
+
+class DynamicConfig(dict):
+    def get(self, key, default=None):
+        try:
+            return get_configs().get(key, default)
+        except Exception:
+            return default
+
+    def __getitem__(self, key):
+        return get_configs()[key]
+
+    def __contains__(self, key):
+        return key in get_configs()
+
+    def items(self):
+        try:
+            return get_configs().items()
+        except Exception:
+            return dict().items()
+
+    def keys(self):
+        try:
+            return get_configs().keys()
+        except Exception:
+            return dict().keys()
+
+    def values(self):
+        try:
+            return get_configs().values()
+        except Exception:
+            return dict().values()
+
+config = DynamicConfig()
 
 active_pontos = {}
 active_pontos_version = 0
@@ -227,7 +259,14 @@ class PicaPonto(commands.Cog):
             funcionarios_db = await db.get_all_funcionarios()
             ids_registrados = [f[0] for f in funcionarios_db]
 
-            for member in guild.members:
+            # Obter todos os membros de forma assíncrona para garantir que contorna o cache
+            try:
+                membros = await guild.fetch_members(limit=None).flatten()
+            except Exception as e:
+                print(f"[DEBUG] Erro ao fetch_members em auto_register_task: {e}")
+                membros = guild.members
+
+            for member in membros:
                 if member.bot:
                     continue
 
@@ -254,17 +293,19 @@ class PicaPonto(commands.Cog):
                         callsign = match.group(1)
                         nome = match.group(2)
                     else:
-                        continue
+                        # Se não tem o formato [Callsign] Nome, vamos gerar um novo callsign automaticamente
+                        callsign = ""
+                        nome = nick_atual
 
                     letra_correta = patente_atual_info["letra"]
                     try:
-                        ext_letra = callsign.split('-')[0]
+                        ext_letra = callsign.split('-')[0] if callsign else ""
                     except:
                         ext_letra = ""
                         
-                    callsign_is_taken = any(f[2] == callsign for f in funcionarios_db)
+                    callsign_is_taken = any(f[2] == callsign for f in funcionarios_db) if callsign else False
                     
-                    if ext_letra != letra_correta or callsign_is_taken:
+                    if not callsign or ext_letra != letra_correta or callsign_is_taken:
                         novo_callsign = await db.get_next_callsign(letra_correta)
                         await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome)
                         
@@ -279,7 +320,7 @@ class PicaPonto(commands.Cog):
                             if log_canal:
                                 embed_log = discord.Embed(
                                     title='LOG: Auto-Correção e Registro',
-                                    description=f'**→ `Sistema`: Auto-Correção (Novo Registro)**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Extraído`: {callsign} (Incorreto/Ocupado)**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
+                                    description=f'**→ `Sistema`: Auto-Correção (Novo Registro)**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Extraído`: {callsign or "Nenhum"} (Incorreto/Ocupado/Ausente)**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
                                     colour=discord.Colour.blue()
                                 )
                                 await log_canal.send(embed=embed_log)
@@ -916,9 +957,25 @@ class PicaPonto(commands.Cog):
 
         registrados = 0
         corrigidos = 0
+        
+        # Diagnósticos
+        total_analisados = 0
+        total_bots = 0
+        total_sem_patente = 0
+        com_patente = 0
+        patentes_detetadas = {}
 
-        for member in guild.members:
+        # Obter todos os membros de forma assíncrona para contornar o cache
+        try:
+            membros = await guild.fetch_members(limit=None).flatten()
+        except Exception as e:
+            print(f"[DEBUG] Erro ao fetch_members em force_autocorrecao: {e}")
+            membros = guild.members
+
+        for member in membros:
+            total_analisados += 1
             if member.bot:
+                total_bots += 1
                 continue
 
             # Obter patente correspondente ao cargo atual
@@ -931,7 +988,11 @@ class PicaPonto(commands.Cog):
                     break
 
             if not patente_atual_key:
+                total_sem_patente += 1
                 continue # Não tem patente
+
+            com_patente += 1
+            patentes_detetadas[patente_atual_info["nome"]] = patentes_detetadas.get(patente_atual_info["nome"], 0) + 1
 
             func_db = next((f for f in funcionarios_db if f[0] == member.id), None)
             
@@ -944,17 +1005,19 @@ class PicaPonto(commands.Cog):
                     callsign = match.group(1)
                     nome = match.group(2)
                 else:
-                    continue
+                    # Se não tem o formato [Callsign] Nome, vamos gerar um novo callsign automaticamente
+                    callsign = ""
+                    nome = nick_atual
 
                 letra_correta = patente_atual_info["letra"]
                 try:
-                    ext_letra = callsign.split('-')[0]
+                    ext_letra = callsign.split('-')[0] if callsign else ""
                 except:
                     ext_letra = ""
                     
-                callsign_is_taken = any(f[2] == callsign for f in funcionarios_db)
+                callsign_is_taken = any(f[2] == callsign for f in funcionarios_db) if callsign else False
                 
-                if ext_letra != letra_correta or callsign_is_taken:
+                if not callsign or ext_letra != letra_correta or callsign_is_taken:
                     novo_callsign = await db.get_next_callsign(letra_correta)
                     await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome)
                     registrados += 1
@@ -971,7 +1034,7 @@ class PicaPonto(commands.Cog):
                         if log_canal:
                             embed_log = discord.Embed(
                                 title='LOG: Auto-Correção e Registro',
-                                description=f'**→ `Sistema`: Auto-Correção (Novo Registro)**\n**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Extraído`: {callsign} (Incorreto/Ocupado)**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
+                                description=f'**→ `Sistema`: Auto-Correção (Novo Registro)**\n**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {member.mention}**\n**→ `Callsign Extraído`: {callsign or "Nenhum"} (Incorreto/Ocupado/Ausente)**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Nova Patente`: {patente_atual_info["nome"]}**',
                                 colour=discord.Colour.blue()
                             )
                             await log_canal.send(embed=embed_log)
@@ -995,6 +1058,16 @@ class PicaPonto(commands.Cog):
                     velha_letra, velho_num_str = velho_callsign.split('-')
                     velho_num = int(velho_num_str)
                 except:
+                    # Se o callsign estiver em formato inválido na BD, força correção
+                    letra_correta = patente_atual_info["letra"]
+                    novo_callsign = await db.get_next_callsign(letra_correta)
+                    nome_func = func_db[3]
+                    await db.add_funcionario(member.id, patente_atual_key, novo_callsign, nome_func)
+                    try:
+                        await member.edit(nick=f"[{novo_callsign}] {nome_func}")
+                    except:
+                        pass
+                    corrigidos += 1
                     continue
                     
                 letra_correta = patente_atual_info["letra"]
@@ -1038,12 +1111,100 @@ class PicaPonto(commands.Cog):
                         except:
                             pass
 
+        desc_embed = (
+            f"A verificação manual de auto-correção e auto-registro foi finalizada com sucesso!\n\n"
+            f"**Novos Registros:** `{registrados}`\n"
+            f"**Callsigns Corrigidos:** `{corrigidos}`\n\n"
+            f"📊 **Métricas de Diagnóstico:**\n"
+            f"• Membros analisados: `{total_analisados}`\n"
+            f"• Bots desconsiderados: `{total_bots}`\n"
+            f"• Membros sem patente configurada: `{total_sem_patente}`\n"
+            f"• Membros elegíveis (com patente): `{com_patente}`\n"
+        )
+        
+        if com_patente > 0:
+            desc_embed += "\n👥 **Distribuição de Patentes Identificadas:**\n"
+            for p_nome, qtd in patentes_detetadas.items():
+                desc_embed += f"• {p_nome}: `{qtd}`\n"
+
+        if com_patente == 0:
+            desc_embed += (
+                f"\n⚠️ **AVISO IMPORTANTE:**\n"
+                f"Nenhum membro no servidor possui atualmente os cargos (Roles) configurados no `.env`/`config.json`.\n"
+                f"Por favor, execute o comando `/listar_cargos` para ver a lista de cargos deste servidor Discord e seus IDs "
+                f"e certifique-se de que o seu `.env` tem os IDs corretos correspondentes!"
+            )
+
         embed = discord.Embed(
             title="✅ Verificação Concluída", 
-            description=f"A verificação manual de auto-correção e auto-registro foi finalizada com sucesso!\n\n**Novos Registros:** `{registrados}`\n**Callsigns Corrigidos:** `{corrigidos}`", 
-            color=discord.Colour.green()
+            description=desc_embed, 
+            color=discord.Colour.green() if com_patente > 0 else discord.Colour.gold()
         )
         await ctx.followup.send(embed=embed)
+
+
+    @commands.slash_command(name="listar_cargos", description="[ADM] Lista todos os cargos do servidor e seus IDs para ajudar na configuração", contexts={discord.InteractionContextType.guild})
+    @has_staff_role()
+    async def listar_cargos(self, ctx: discord.ApplicationContext):
+        await ctx.defer()
+        guild = ctx.guild
+        roles = sorted(guild.roles, key=lambda r: r.position, reverse=True)
+        
+        config_atual = get_configs()
+        patentes_configuradas = config_atual.get("cargos_patentes", {})
+        
+        embed = discord.Embed(
+            title="📋 Cargos do Servidor",
+            description="Use esta lista para copiar os IDs corretos para o seu arquivo `.env`.",
+            color=discord.Colour.blue()
+        )
+        
+        # 1. Cargos Gerais Configurados
+        cargos_gerais = []
+        staff_role_id = config_atual.get("staff_role_id")
+        ponto_role_id = config_atual.get("ponto_role_id")
+        cargo_equipa_id = config_atual.get("cargo_equipa_id")
+
+        for r in roles:
+            if r.is_default(): # Skip @everyone
+                continue
+            
+            detalhes = []
+            if staff_role_id and r.id == int(staff_role_id):
+                detalhes.append("Staff Role")
+            if ponto_role_id and r.id == int(ponto_role_id):
+                detalhes.append("Ponto Role")
+            if cargo_equipa_id and r.id == int(cargo_equipa_id):
+                detalhes.append("Cargo Equipa")
+                
+            # Verificar se corresponde a alguma patente
+            for p_key, p_info in patentes_configuradas.items():
+                if p_info.get("id") and r.id == int(p_info["id"]):
+                    detalhes.append(f"Patente: {p_info.get('nome')} ({p_key})")
+            
+            info_str = f"**{r.name}**\n`ID: {r.id}`"
+            if detalhes:
+                info_str += f" - 🟢 **{', '.join(detalhes)}**"
+            cargos_gerais.append(info_str)
+
+        # Paginar se for muito longo (limite de embed do Discord é 4096 caracteres)
+        texto_completo = "\n\n".join(cargos_gerais)
+        if len(texto_completo) > 4000:
+            # Dividir em partes
+            partes = [cargos_gerais[i:i + 15] for i in range(0, len(cargos_gerais), 15)]
+            for idx, parte in enumerate(partes):
+                emb = discord.Embed(
+                    title=f"📋 Cargos do Servidor (Parte {idx+1})",
+                    description="\n\n".join(parte),
+                    color=discord.Colour.blue()
+                )
+                if idx == 0:
+                    await ctx.followup.send(embed=emb)
+                else:
+                    await ctx.channel.send(embed=emb)
+        else:
+            embed.description = texto_completo
+            await ctx.followup.send(embed=embed)
 
 
     @commands.slash_command(description='Retorna o ranking das top 10 pessoas com mais horas na semana.', contexts={discord.InteractionContextType.guild})

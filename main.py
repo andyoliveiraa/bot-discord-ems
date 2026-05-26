@@ -37,7 +37,7 @@ client.load_extension('ponto')
 # Sincroniza config inicial com o módulo ponto
 try:
     import ponto
-    ponto.config = config
+    # ponto.py agora lida com a configuração de forma 100% dinâmica
 except ImportError:
     pass
 
