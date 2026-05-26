@@ -512,7 +512,7 @@ class PicaPonto(commands.Cog):
     @has_staff_role()
     async def contratar(self, ctx: discord.ApplicationContext,
                        usuario: Option(discord.Member, 'Selecione o usuário', required=True),
-                       patente: Option(str, 'Selecione a patente', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
+                       patente: Option(str, 'Selecione a patente', choices=[discord.OptionChoice(name=v.get('nome', k.replace('_', ' ').title()), value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
                        nome: Option(str, 'Nome do funcionário', required=True),
                        motivo: Option(str, 'Motivo da contratação', required=True)):
         
@@ -656,7 +656,7 @@ class PicaPonto(commands.Cog):
     @has_staff_role()
     async def promover(self, ctx: discord.ApplicationContext,
                        usuario: Option(discord.Member, 'Selecione o usuário', required=True),
-                       nova_patente: Option(str, 'Selecione a nova patente', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
+                       nova_patente: Option(str, 'Selecione a nova patente', choices=[discord.OptionChoice(name=v.get('nome', k.replace('_', ' ').title()), value=k) for k, v in config.get("cargos_patentes", {}).items()], required=True),
                        motivo: Option(str, 'Motivo da promoção/alteração', required=True)):
         
         await ctx.defer()
@@ -741,7 +741,7 @@ class PicaPonto(commands.Cog):
                        motivo: Option(str, 'Motivo da alteração manual', required=True),
                        novo_callsign: Option(str, 'Digite o novo callsign (ex: W-01) - Deixe em branco para não alterar', required=False, default=None),
                        novo_nome: Option(str, 'Digite o novo nome - Deixe em branco para não alterar', required=False, default=None),
-                       novo_cargo: Option(str, 'Selecione o novo cargo - Deixe em branco para não alterar', choices=[discord.OptionChoice(name=v['nome'], value=k) for k, v in config.get("cargos_patentes", {}).items()], required=False, default=None)):
+                       novo_cargo: Option(str, 'Selecione o novo cargo - Deixe em branco para não alterar', choices=[discord.OptionChoice(name=v.get('nome', k.replace('_', ' ').title()), value=k) for k, v in config.get("cargos_patentes", {}).items()], required=False, default=None)):
         
         await ctx.defer()
         
