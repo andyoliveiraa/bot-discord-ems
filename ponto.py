@@ -171,7 +171,7 @@ class PicaPonto(commands.Cog):
                 
                 await db.create_registry(int(user_id), horario_inicio, agora, True, 0, json.dumps(estado["pausas"]))
                 
-                canal_log = self.client.get_channel(config["log_channel_id"])
+                canal_log = self.client.get_channel(int(config["log_channel_id"]))
                 if canal_log and user:
                     data_abertura = datetime.datetime.fromtimestamp(horario_inicio, obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")
                     embed_log = discord.Embed(description=f'**→ `Status Pica-Ponto`: Fechado Automatically (24h Inactivity)** *(horas não contabilizadas)*\n**→ `Funcionário`: {user.mention}**\n'
@@ -189,7 +189,7 @@ class PicaPonto(commands.Cog):
 
     @tasks.loop(time=datetime.time(hour=7, minute=0, tzinfo=obter_timezone()))
     async def auto_backup_task(self):
-        canal_log = self.client.get_channel(config["log_channel_id"])
+        canal_log = self.client.get_channel(int(config["log_channel_id"]))
         if canal_log:
             try:
                 await canal_log.send(
@@ -275,7 +275,7 @@ class PicaPonto(commands.Cog):
                             
                         log_canal_id = config.get("log_contratacoes_id")
                         if log_canal_id:
-                            log_canal = guild.get_channel(log_canal_id)
+                            log_canal = guild.get_channel(int(log_canal_id))
                             if log_canal:
                                 embed_log = discord.Embed(
                                     title='LOG: Auto-Correção e Registro',
@@ -288,7 +288,7 @@ class PicaPonto(commands.Cog):
                         
                         log_canal_id = config.get("log_contratacoes_id")
                         if log_canal_id:
-                            log_canal = guild.get_channel(log_canal_id)
+                            log_canal = guild.get_channel(int(log_canal_id))
                             if log_canal:
                                 embed_log = discord.Embed(
                                     title='LOG: Auto-Registro Efetuado',
@@ -327,7 +327,7 @@ class PicaPonto(commands.Cog):
                             
                         log_canal_id = config.get("log_contratacoes_id")
                         if log_canal_id:
-                            log_canal = guild.get_channel(log_canal_id)
+                            log_canal = guild.get_channel(int(log_canal_id))
                             if log_canal:
                                 embed_log = discord.Embed(
                                     title='LOG: Auto-Correção de Callsign',
@@ -354,7 +354,7 @@ class PicaPonto(commands.Cog):
         if not impagos:
             return
 
-        canal_log = self.client.get_channel(config["log_channel_id"])
+        canal_log = self.client.get_channel(int(config["log_channel_id"]))
         if not canal_log:
             return
 
@@ -470,7 +470,7 @@ class PicaPonto(commands.Cog):
             await usuario.send(f'**<:aviso:1269036173381206132> AVISO!** Você sofreu uma alteração nas horas trabalhadas!\n**→ Staff:** {ctx.author.mention}\n**→ Adicionou:** {horas} hora(s) e {minutos} minuto(s)\n**→ Motivo:** {motivo}\n\n`Em caso de problemas ou dúvidas, questione o staff mencionado acima.`')
         except (discord.HTTPException, discord.Forbidden):
             pass
-        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        canal_log = ctx.guild.get_channel(int(config['log_channel_id']))
         embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
             f'**→ `Horas adicionadas`: {horas} horas e {minutos} minutos**\n**→ `Motivo inserido`: {motivo}**', colour=discord.Colour.purple())
 
@@ -501,7 +501,7 @@ class PicaPonto(commands.Cog):
         except (discord.HTTPException, discord.Forbidden):
             pass
             
-        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        canal_log = ctx.guild.get_channel(int(config['log_channel_id']))
         embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
             f'**→ `Horas removidas`: {horas} horas e {minutos} minutos**\n**→ `Motivo inserido`: {motivo}**', colour=discord.Colour.purple())
 
@@ -526,7 +526,7 @@ class PicaPonto(commands.Cog):
         callsign = await db.get_next_callsign(letra)
         
         cargos_para_adicionar = []
-        cargo_patente = ctx.guild.get_role(cargo_patente_id)
+        cargo_patente = ctx.guild.get_role(int(cargo_patente_id))
         if cargo_patente:
             cargos_para_adicionar.append(cargo_patente)
             
@@ -578,7 +578,7 @@ class PicaPonto(commands.Cog):
             
         log_canal_id = config.get("log_contratacoes_id")
         if log_canal_id:
-            log_canal = ctx.guild.get_channel(log_canal_id)
+            log_canal = ctx.guild.get_channel(int(log_canal_id))
             if log_canal:
                 embed_log = discord.Embed(title='LOG: Contratação', description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n**→ `Nova Patente`: {patente_info["nome"]}**\n**→ `Callsign`: {callsign}**\n**→ `Motivo`: {motivo}**', colour=discord.Colour.green())
                 embed_log.set_author(name='Contratação efetuada', icon_url=self.client.user.display_avatar)
@@ -643,7 +643,7 @@ class PicaPonto(commands.Cog):
             
         log_canal_id = config.get("log_contratacoes_id")
         if log_canal_id:
-            log_canal = ctx.guild.get_channel(log_canal_id)
+            log_canal = ctx.guild.get_channel(int(log_canal_id))
             if log_canal:
                 embed_log = discord.Embed(title='LOG: Despedimento', description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n**→ `Motivo`: {motivo}**', colour=discord.Colour.red())
                 embed_log.set_author(name='Despedimento efetuado', icon_url=self.client.user.display_avatar)
@@ -725,7 +725,7 @@ class PicaPonto(commands.Cog):
             
         log_canal_id = config.get("log_contratacoes_id")
         if log_canal_id:
-            log_canal = ctx.guild.get_channel(log_canal_id)
+            log_canal = ctx.guild.get_channel(int(log_canal_id))
             if log_canal:
                 embed_log = discord.Embed(title='LOG: Promoção/Alteração de Patente', description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n**→ `Patente Antiga`: {patente_antiga_info["nome"] if patente_antiga_info else "Desconhecida"}**\n**→ `Nova Patente`: {nova_patente_info["nome"]}**\n**→ `Novo Callsign`: {novo_callsign}**\n**→ `Motivo`: {motivo}**', colour=discord.Colour.blue())
                 embed_log.set_author(name='Promoção efetuada', icon_url=self.client.user.display_avatar)
@@ -828,7 +828,7 @@ class PicaPonto(commands.Cog):
             
         log_canal_id = config.get("log_contratacoes_id")
         if log_canal_id:
-            log_canal = ctx.guild.get_channel(log_canal_id)
+            log_canal = ctx.guild.get_channel(int(log_canal_id))
             if log_canal:
                 embed_log = discord.Embed(
                     title='LOG: Edição Manual de Funcionário',
@@ -856,7 +856,7 @@ class PicaPonto(commands.Cog):
         await db.set_time(usuario.id, 0)
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você resetou as horas de {usuario.mention}.')
         
-        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        canal_log = ctx.guild.get_channel(int(config['log_channel_id']))
         embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
             f'**→ O(A) funcionário(a) acima teve todas as suas horas de pica-ponto resetadas.**', colour=discord.Colour.red())
 
@@ -888,7 +888,7 @@ class PicaPonto(commands.Cog):
         except (discord.HTTPException, discord.Forbidden):
             await ctx.followup.send(f'⚠️ Não foi possível enviar a DM para {usuario.mention}. O link de reset é: `https://ems.discloud.app/reset_password/{reset_token}`', ephemeral=True)
 
-        canal_log = ctx.guild.get_channel(config['log_channel_id'])
+        canal_log = ctx.guild.get_channel(int(config['log_channel_id']))
         if canal_log:
             embed_log = discord.Embed(description=f'**→ `Staff`: {ctx.author.mention}**\n**→ `Funcionário`: {usuario.mention}**\n'
                 f'**→ O(A) funcionário(a) acima teve a sua senha do painel web resetada pela Staff.**', colour=discord.Colour.orange())
@@ -967,7 +967,7 @@ class PicaPonto(commands.Cog):
                         
                     log_canal_id = config.get("log_contratacoes_id")
                     if log_canal_id:
-                        log_canal = guild.get_channel(log_canal_id)
+                        log_canal = guild.get_channel(int(log_canal_id))
                         if log_canal:
                             embed_log = discord.Embed(
                                 title='LOG: Auto-Correção e Registro',
@@ -981,7 +981,7 @@ class PicaPonto(commands.Cog):
                     
                     log_canal_id = config.get("log_contratacoes_id")
                     if log_canal_id:
-                        log_canal = guild.get_channel(log_canal_id)
+                        log_canal = guild.get_channel(int(log_canal_id))
                         if log_canal:
                             embed_log = discord.Embed(
                                 title='LOG: Auto-Registro Efetuado',
@@ -1022,7 +1022,7 @@ class PicaPonto(commands.Cog):
                         
                     log_canal_id = config.get("log_contratacoes_id")
                     if log_canal_id:
-                        log_canal = guild.get_channel(log_canal_id)
+                        log_canal = guild.get_channel(int(log_canal_id))
                         if log_canal:
                             embed_log = discord.Embed(
                                 title='LOG: Auto-Correção de Callsign',
@@ -1341,7 +1341,7 @@ class OpcoesFechamentoStaff(View):
             pauses_json = json.dumps(estado["pausas"])
             await db.create_registry(int(user_id), horario_inicio, horario_atual, inter.user.id, segundos_totais if contabiliza else 0, pauses_json)
             
-            canal_log = inter.guild.get_channel(config["log_channel_id"])
+            canal_log = inter.guild.get_channel(int(config["log_channel_id"]))
             data_abertura = datetime.datetime.fromtimestamp(horario_inicio, obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")
             pausas_desc = ''
             for p in estado["pausas"]:
@@ -1522,7 +1522,7 @@ class finalizarPonto(View):
 
         await inter.followup.send(f'⏰ **Serviço finalizado!**\n⏰ Tempo total de serviço: `{horas}` horas e `{minutos}` minutos', ephemeral=True)
 
-        canal_log = inter.guild.get_channel(config["log_channel_id"])
+        canal_log = inter.guild.get_channel(int(config["log_channel_id"]))
 
         data_abertura = datetime.datetime.fromtimestamp(horario_inicio, obter_timezone()).strftime("%d/%m/%Y, %H:%M:%S")
         pausas_desc = ''
@@ -1669,7 +1669,7 @@ class BotoesSemana(View):
                 color=discord.Colour.green()
             )
             await inter.followup.send(embed=embed_ok, ephemeral=True)
-            canal_log = inter.guild.get_channel(config['log_channel_id'])
+            canal_log = inter.guild.get_channel(int(config['log_channel_id']))
             embed_log = discord.Embed(
                 description=f'**\u2192 `Staff`: {inter.user.mention}**\n**\u2192 Encerramento semanal efetuado. Semana arquivada com {n_impagos} pagamentos pendentes.**',
                 colour=discord.Colour.red()
@@ -1684,7 +1684,7 @@ class BotoesSemana(View):
                 color=discord.Colour.green()
             )
             await inter.followup.send(embed=embed_ok, ephemeral=True)
-            canal_log = inter.guild.get_channel(config['log_channel_id'])
+            canal_log = inter.guild.get_channel(int(config['log_channel_id']))
             embed_log = discord.Embed(
                 description=f'**\u2192 `Staff`: {inter.user.mention}**\n**\u2192 Relatório semanal gerado e backup enviado. Sem reset.**',
                 colour=discord.Colour.blue()
@@ -1713,7 +1713,7 @@ class ConfirmarReset(View):
                               color=discord.Colour.red())
         await inter.response.send_message(embed=embed)
         
-        canal_log = inter.guild.get_channel(config['log_channel_id'])
+        canal_log = inter.guild.get_channel(int(config['log_channel_id']))
         embed_log = discord.Embed(description=f'**→ `Staff`: {inter.user.mention}**\n'
             f'**→ Toda a base de dados de pica-ponto acaba de ser resetada.**', colour=discord.Colour.red())
         embed_log.set_author(name='LOG: Reset ALL Database', icon_url=inter.user.display_avatar)

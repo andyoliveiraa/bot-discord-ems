@@ -582,7 +582,7 @@ async def api_active_ponto_action(target_user_id, action):
             # Tentar enviar LOG no Discord
             if client:
                 try:
-                    canal_log = client.get_channel(config["log_channel_id"])
+                    canal_log = client.get_channel(int(config["log_channel_id"]))
                     if canal_log:
                         import discord
                         data_abertura = datetime.datetime.fromtimestamp(horario_inicio, tz(config.get('timezone', 'UTC'))).strftime("%d/%m/%Y, %H:%M:%S")
@@ -618,7 +618,7 @@ async def api_active_ponto_action(target_user_id, action):
             
             if client:
                 try:
-                    canal_log = client.get_channel(config["log_channel_id"])
+                    canal_log = client.get_channel(int(config["log_channel_id"]))
                     if canal_log:
                         import discord
                         embed_log = discord.Embed(
