@@ -68,7 +68,10 @@ def setup():
         "PONTO_ROLE_ID": "ponto_role_id",
         "CARGO_EQUIPA_ID": "cargo_equipa_id",
         "BOT_TOKEN": "token",
-        "TOKEN": "token"
+        "TOKEN": "token",
+        "MAXMIND_ACCOUNT_ID": "maxmind_account_id",
+        "MAXMIND_LICENSE_KEY": "maxmind_license_key",
+        "MAXMIND_USE_GEOLITE": "maxmind_use_geolite"
     }
     
     for env_key, config_key in mappings.items():

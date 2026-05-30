@@ -628,7 +628,10 @@ def get_configs():
         "log_channel_id": 0,
         "nome_corp": "EMS",
         "server_name": "EMS",
-        "cargos_patentes": {}
+        "cargos_patentes": {},
+        "maxmind_account_id": None,
+        "maxmind_license_key": None,
+        "maxmind_use_geolite": "true"
     }
     
     for k, v in default_configs.items():
@@ -651,6 +654,9 @@ def get_configs():
         "NOME_CORP": ("nome_corp", str),
         "TIMEZONE": ("timezone", str),
         "CARGO_EQUIPA_ID": ("cargo_equipa_id", int),
+        "MAXMIND_ACCOUNT_ID": ("maxmind_account_id", int),
+        "MAXMIND_LICENSE_KEY": ("maxmind_license_key", str),
+        "MAXMIND_USE_GEOLITE": ("maxmind_use_geolite", str),
     }
     
     for env_key, (config_key, cast_type) in env_mappings.items():

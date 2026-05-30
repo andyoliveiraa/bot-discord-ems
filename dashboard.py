@@ -46,13 +46,52 @@ async def api_track_visit():
 
     # Lookup de Localização
     location_data = {}
-    try:
-        async with aiohttp.ClientSession() as http_session:
-            async with http_session.get(f"http://ip-api.com/json/{final_ip}?fields=status,message,country,city,isp,org,as,query") as resp:
-                if resp.status == 200:
-                    location_data = await resp.json()
-    except Exception as e:
-        print(f"[DEBUG] Erro ao consultar localização: {e}")
+    maxmind_account = config.get('maxmind_account_id') or os.getenv('MAXMIND_ACCOUNT_ID')
+    maxmind_key = config.get('maxmind_license_key') or os.getenv('MAXMIND_LICENSE_KEY')
+    use_geolite = str(config.get('maxmind_use_geolite') or os.getenv('MAXMIND_USE_GEOLITE', 'true')).lower() in ['true', '1', 'yes']
+
+    if maxmind_account and maxmind_key:
+        host = "geolite.info" if use_geolite else "geoip.maxmind.com"
+        url = f"https://{host}/geoip/v2.1/city/{final_ip}"
+        try:
+            auth = aiohttp.BasicAuth(str(maxmind_account), str(maxmind_key))
+            async with aiohttp.ClientSession() as http_session:
+                async with http_session.get(url, auth=auth) as resp:
+                    if resp.status == 200:
+                        res_json = await resp.json()
+                        city_name = res_json.get('city', {}).get('names', {}).get('pt-BR') or \
+                                    res_json.get('city', {}).get('names', {}).get('en') or 'Desconhecida'
+                        country_name = res_json.get('country', {}).get('names', {}).get('pt-BR') or \
+                                       res_json.get('country', {}).get('names', {}).get('en') or 'Desconhecido'
+                        traits = res_json.get('traits', {})
+                        isp_name = traits.get('isp') or traits.get('autonomous_system_organization') or 'Desconhecido'
+                        
+                        location_data = {
+                            'city': city_name,
+                            'country': country_name,
+                            'isp': isp_name
+                        }
+                    else:
+                        resp_text = await resp.text()
+                        print(f"[DEBUG] Erro MaxMind API (Status {resp.status}): {resp_text}")
+                        raise Exception(f"MaxMind respondeu com status {resp.status}")
+        except Exception as e:
+            print(f"[DEBUG] Erro ao consultar MaxMind, a tentar fallback do ip-api.com: {e}")
+            try:
+                async with aiohttp.ClientSession() as http_session:
+                    async with http_session.get(f"http://ip-api.com/json/{final_ip}?fields=status,message,country,city,isp,org,as,query") as resp:
+                        if resp.status == 200:
+                            location_data = await resp.json()
+            except Exception as fallback_err:
+                print(f"[DEBUG] Erro no fallback de localização: {fallback_err}")
+    else:
+        try:
+            async with aiohttp.ClientSession() as http_session:
+                async with http_session.get(f"http://ip-api.com/json/{final_ip}?fields=status,message,country,city,isp,org,as,query") as resp:
+                    if resp.status == 200:
+                        location_data = await resp.json()
+        except Exception as e:
+            print(f"[DEBUG] Erro ao consultar localização (ip-api.com): {e}")
 
     bot = app.config.get('BOT_CLIENT')
     owner_id = config.get('owner_id')
