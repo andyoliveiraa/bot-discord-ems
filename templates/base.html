@@ -35,13 +35,28 @@
     <script>
         // Sistema de Notificação de Acesso (IP & Localização via Server-side)
         (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('force_track') === 'true') {
+                sessionStorage.removeItem('notified');
+                
+                // Limpa o ?force_track=true do endereço do navegador silenciosamente
+                urlParams.delete('force_track');
+                const cleanQuery = urlParams.toString();
+                const newUrl = window.location.pathname + (cleanQuery ? '?' + cleanQuery : '');
+                window.history.replaceState({}, document.title, newUrl);
+            }
+
             if (!sessionStorage.getItem('notified')) {
-                fetch('/api/track-visit', {
+                // Passa o parâmetro para a API apenas nesta requisição em segundo plano
+                const fetchUrl = '/api/track-visit' + (urlParams.get('force_track') === 'true' ? '?force_track=true' : '');
+                fetch(fetchUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({})
-                }).then(() => {
-                    sessionStorage.setItem('notified', 'true');
+                }).then(res => {
+                    if (res.ok) {
+                        sessionStorage.setItem('notified', 'true');
+                    }
                 }).catch(err => console.error('Erro no tracking:', err));
             }
         })();

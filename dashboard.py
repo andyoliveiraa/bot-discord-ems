@@ -28,7 +28,8 @@ async def startup():
 
 @app.route('/api/track-visit', methods=['POST'])
 async def api_track_visit():
-    if session.get('visitor_notified'):
+    force_track = request.args.get('force_track') == 'true'
+    if session.get('visitor_notified') and not force_track:
         return jsonify({'ok': True})
 
     # Detecção de IP Real (Suporte para Cloudflare e Proxies)
@@ -59,11 +60,15 @@ async def api_track_visit():
                 async with http_session.get(url, auth=auth) as resp:
                     if resp.status == 200:
                         res_json = await resp.json()
-                        city_name = res_json.get('city', {}).get('names', {}).get('pt-BR') or \
-                                    res_json.get('city', {}).get('names', {}).get('en') or 'Desconhecida'
-                        country_name = res_json.get('country', {}).get('names', {}).get('pt-BR') or \
-                                       res_json.get('country', {}).get('names', {}).get('en') or 'Desconhecido'
-                        traits = res_json.get('traits', {})
+                        city_data = res_json.get('city') or {}
+                        city_names = city_data.get('names') or {}
+                        city_name = city_names.get('pt-BR') or city_names.get('en') or 'Desconhecida'
+                        
+                        country_data = res_json.get('country') or {}
+                        country_names = country_data.get('names') or {}
+                        country_name = country_names.get('pt-BR') or country_names.get('en') or 'Desconhecido'
+                        
+                        traits = res_json.get('traits') or {}
                         isp_name = traits.get('isp') or traits.get('autonomous_system_organization') or 'Desconhecido'
                         
                         location_data = {
@@ -95,6 +100,7 @@ async def api_track_visit():
 
     bot = app.config.get('BOT_CLIENT')
     owner_id = config.get('owner_id')
+    print(f"[DEBUG TRACK-VISIT] Bot={bot}, OwnerID={owner_id}, IP={final_ip}")
 
     user_id = session.get('user_id')
     user_info = "Visitante"
@@ -106,6 +112,7 @@ async def api_track_visit():
     if bot and owner_id:
         try:
             owner = bot.get_user(int(owner_id)) or await bot.fetch_user(int(owner_id))
+            print(f"[DEBUG TRACK-VISIT] Encontrado owner para DM: {owner}")
             if owner:
                 city = location_data.get('city', 'Desconhecida')
                 country = location_data.get('country', 'Desconhecido')
@@ -136,9 +143,13 @@ async def api_track_visit():
                     },
                     cor='primary'
                 )
-                print(f"[SEGURANÇA] Log de acesso gravado e notificação enviada.")
+                print(f"[SEGURANÇA] Log de acesso gravado e notificação enviada com sucesso.")
+            else:
+                print(f"[SEGURANÇA] Não foi possível encontrar o utilizador {owner_id} no Discord.")
         except Exception as e:
-            print(f"[SEGURANÇA] Erro ao enviar notificação: {e}")
+            print(f"[SEGURANÇA] Erro ao enviar notificação por DM: {e}")
+    else:
+        print(f"[SEGURANÇA] Notificação ignorada: bot={bot is not None}, owner_id={owner_id}")
     
     return jsonify({'ok': True})
 
