@@ -31,13 +31,13 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
 - **Arquivamento Semanal:** Encerra a semana, arquivando todos os pontos e criando registos de pagamento por funcionário.
 - **Controlo de Pagamentos:** Marca funcionários como "Pagos" no dashboard com registo de quem marcou e quando.
 - **Lembretes Diários:** O bot notifica automaticamente os staffs sobre pagamentos pendentes todas as manhãs, com nomes e números de funcionário (sem IDs numéricos).
-- **Relatório PDF Ultra-Detalhado (NOVO):** Disponível em cada semana encerrada no painel admin:
+- **Relatório PDF Ultra-Detalhado (NOVO):** Disponível no painel admin (semanas encerradas) ou no Discord via `/pdf_detalhado`:
   - Lista todos os turnos individualmente com horários exatos (entrada, saída, pausas)
   - Identifica fechos por Staff (com ID) e turnos não contabilizados
-  - Regista ajustes manuais de horas (adicionadas/removidas por Staff) com cor diferenciada
+  - Regista ajustes manuais de horas identificando o **Nome e ID do Staff** responsável e o **Motivo** da alteração
   - Apresenta a **fórmula matemática completa** de cálculo do pagamento por funcionário
   - Inclui página de resumo geral com total da semana
-  - Enviado automaticamente para o canal de Logs do Discord ao clicar no botão "PDF Detalhado"
+  - Enviado automaticamente para o canal de Logs ou para as DMs do administrador
 
 ### 👥 Sistema de RH Integrado
 - **Contratação/Demissão:** Automatização de cargos, números de funcionário (identificadores) e apelidos limpos no Discord.
@@ -91,7 +91,8 @@ O sistema baseia-se num ficheiro `config.json` e num ficheiro de base de dados S
 - `/deltempo @user [horas] [minutos] [motivo]` — Remove tempo manual de um funcionário.
 - `/pontosreg @user` — Consulta o histórico detalhado de registos de um utilizador nesta semana.
 - `/resetarsemana` — Gera PDF, faz backup e encerra a semana (gera dívidas a pagar no dashboard).
-- `/semana` — Apenas visualiza o relatório PDF atual de pagamentos sem encerrar a semana ativa.
+- `/pdf_detalhado` — Gera o relatório PDF ultra-detalhado da semana **ativa**, sem a encerrar, enviando em privado para si.
+- `/semana` — Apenas visualiza o relatório simples da semana ativa em forma de Embed no Discord.
 - `/ranking` — Top 10 de horas trabalhadas na semana atual (exibe Nº Func. e Nome).
 - `/autocorrecao` — Força a auto-correção de nomes e apelidos de todos os membros do Discord conforme os registos da base de dados (removendo siglas e callsigns dos nicks no Discord).
 - `/resetarsenha @user` — Gera um novo link de redefinição de senha para o Dashboard em nome da Direção.
