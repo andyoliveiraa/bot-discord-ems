@@ -88,6 +88,22 @@ class Database:
                     )
                 ''')
 
+                # Tabela do Sistema de Tickets
+                await cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS tickets (
+                        channel_id INTEGER PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        category TEXT NOT NULL,
+                        subject TEXT NOT NULL,
+                        details TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'open',
+                        claimed_by INTEGER DEFAULT NULL,
+                        created_at INTEGER NOT NULL,
+                        closed_at INTEGER DEFAULT NULL,
+                        closed_by INTEGER DEFAULT NULL
+                    )
+                ''')
+
             await conn.commit()
 
     # =========================================================
@@ -556,6 +572,71 @@ class Database:
                     'WHERE semana_id = ? AND user_id = ?',
                     (agora, pago_por, semana_id, user_id))
             await conn.commit()
+
+    # =========================================================
+    # TICKETS
+    # =========================================================
+
+    async def create_ticket(self, channel_id: int, user_id: int, category: str, subject: str, details: str):
+        agora = int(_time.time())
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('''
+                    INSERT INTO tickets (channel_id, user_id, category, subject, details, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'open', ?)
+                ''', (channel_id, user_id, category, subject, details, agora))
+            await conn.commit()
+
+    async def get_ticket(self, channel_id: int):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute('SELECT * FROM tickets WHERE channel_id = ?', (channel_id,))
+                return await cursor.fetchone()
+
+    async def get_active_tickets_by_user(self, user_id: int):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT * FROM tickets WHERE user_id = ? AND status != 'closed'", (user_id,))
+                return await cursor.fetchall()
+
+    async def claim_ticket(self, channel_id: int, staff_id: int):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("UPDATE tickets SET status = 'claimed', claimed_by = ? WHERE channel_id = ?", (staff_id, channel_id))
+            await conn.commit()
+
+    async def close_ticket(self, channel_id: int, staff_id: int):
+        agora = int(_time.time())
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("UPDATE tickets SET status = 'closed', closed_at = ?, closed_by = ? WHERE channel_id = ?", (agora, staff_id, channel_id))
+            await conn.commit()
+
+    async def get_active_ticket_count(self):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT COUNT(*) FROM tickets WHERE status != 'closed'")
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+
+    async def get_claimed_ticket_count(self):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'claimed'")
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+
+    async def get_all_active_tickets(self):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT * FROM tickets WHERE status != 'closed' ORDER BY created_at DESC")
+                return await cursor.fetchall()
+
+    async def get_all_tickets(self):
+        async with aiosqlite.connect(self.connector) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT * FROM tickets ORDER BY created_at DESC LIMIT 100")
+                return await cursor.fetchall()
 
     async def get_semanas_com_impagos(self):
         """Retorna lista de (semana_id, user_id, valor_calculado) com pago=0."""

@@ -1120,6 +1120,175 @@ async def api_encerrar_semana():
                     'pagamentos': len(resultado['pagamentos'])})
 
 
+# ── Painel Web de Tickets ───────────────────────────────────────────────────
+
+@app.route('/tickets')
+@login_required
+async def tickets_list():
+    if not session.get('is_admin'):
+        await flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    
+    ativos = await db.get_all_active_tickets()
+    todos = await db.get_all_tickets()
+    
+    return await render_template('tickets.html', ativos=ativos, todos=todos)
+
+@app.route('/ticket/<int:channel_id>')
+@login_required
+async def ticket_view(channel_id):
+    if not session.get('is_admin'):
+        return redirect(url_for('index'))
+        
+    ticket = await db.get_ticket(channel_id)
+    if not ticket:
+        await flash('Ticket não encontrado.', 'danger')
+        return redirect(url_for('tickets_list'))
+        
+    bot = app.config.get('BOT_CLIENT')
+    mensagens = []
+    
+    if bot:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            try:
+                # Obter as mensagens do discord
+                mensagens_obj = [msg async for msg in channel.history(limit=50, oldest_first=True)]
+                for m in mensagens_obj:
+                    # Formatar a mensagem para o frontend
+                    mensagens.append({
+                        'id': m.id,
+                        'author_name': m.author.display_name,
+                        'author_avatar': m.author.display_avatar.url if m.author.display_avatar else f"https://cdn.discordapp.com/embed/avatars/{int(m.author.id) % 5}.png",
+                        'content': m.clean_content,
+                        'created_at': m.created_at.timestamp(),
+                        'embeds': [e.to_dict() for e in m.embeds] if m.embeds else [],
+                        'is_bot': m.author.bot
+                    })
+            except Exception as e:
+                print(f"Erro ao obter histórico do ticket {channel_id}: {e}")
+                
+    return await render_template('ticket_view.html', ticket=ticket, mensagens=mensagens)
+
+@app.route('/api/ticket/<int:channel_id>/reply', methods=['POST'])
+@login_required
+async def api_ticket_reply(channel_id):
+    if not session.get('is_admin'):
+        return jsonify({'erro': 'Sem permissão'}), 403
+        
+    form = await request.form
+    mensagem = form.get('mensagem', '').strip()
+    
+    if not mensagem:
+        return jsonify({'erro': 'Mensagem vazia'}), 400
+        
+    ticket = await db.get_ticket(channel_id)
+    if not ticket or ticket[5] == 'closed':
+        return jsonify({'erro': 'Ticket fechado ou inexistente'}), 400
+        
+    bot = app.config.get('BOT_CLIENT')
+    if bot:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            try:
+                staff_uid = session.get('user_id')
+                staff_func = await db.get_funcionario(staff_uid)
+                staff_nome = staff_func[2] if staff_func else "Staff Desconhecido"
+                
+                # Vamos enviar como um Embed para ser bonito e mostrar quem respondeu pela web
+                import discord
+                embed = discord.Embed(description=mensagem, color=discord.Color.from_rgb(88, 101, 242))
+                embed.set_author(name=f"Resposta de: {staff_nome}", icon_url="https://i.imgur.com/vHq0L5P.png") # Icone de web/staff
+                
+                await channel.send(embed=embed)
+                return jsonify({'ok': True})
+            except Exception as e:
+                return jsonify({'erro': str(e)}), 500
+    
+    return jsonify({'erro': 'Bot não conectado ou canal não encontrado'}), 500
+
+@app.route('/api/ticket/<int:channel_id>/action', methods=['POST'])
+@login_required
+async def api_ticket_action(channel_id):
+    if not session.get('is_admin'):
+        return jsonify({'erro': 'Sem permissão'}), 403
+        
+    form = await request.form
+    action = form.get('action')
+    staff_id = session.get('user_id')
+    
+    ticket = await db.get_ticket(channel_id)
+    if not ticket:
+        return jsonify({'erro': 'Ticket não encontrado'}), 404
+        
+    if action == 'claim':
+        if ticket[5] == 'claimed':
+            return jsonify({'erro': 'Ticket já assumido'}), 400
+        await db.claim_ticket(channel_id, staff_id)
+        # Tentar editar o nome no discord
+        bot = app.config.get('BOT_CLIENT')
+        if bot:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                staff_func = await db.get_funcionario(staff_id)
+                staff_nome = staff_func[2] if staff_func else str(staff_id)
+                try:
+                    await channel.edit(name=f"atendido-{staff_nome[:10]}")
+                    import discord
+                    embed = discord.Embed(description=f"👤 **Este ticket foi assumido por {staff_nome} (via Web)**", color=discord.Color.green())
+                    await channel.send(embed=embed)
+                except:
+                    pass
+        return jsonify({'ok': True})
+        
+    elif action == 'close':
+        bot = app.config.get('BOT_CLIENT')
+        if bot:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.send("🔒 A encerrar ticket pelo Web Dashboard... (O canal será apagado em breve)")
+                    # Executar o mesmo fluxo de fecho que existe no bot pode ser complicado invocar diretamente a view.
+                    # Mas podemos simplesmente apagar o canal e atualizar BD. O logger do bot (se existir evento on_guild_channel_delete) não vai gerar o transcript, então devíamos gerar aqui!
+                    from tickets import gerar_transcript_html
+                    transcript = await gerar_transcript_html(channel)
+                    
+                    creator_id = ticket[1]
+                    cfg = get_configs()
+                    log_channel_id = cfg.get("ticket_log_channel_id")
+                    
+                    import discord
+                    file = discord.File(transcript, filename=f"transcript-{channel.name}.html")
+                    log_embed = discord.Embed(title=f"📁 Transcrito (Web): {channel.name}", color=discord.Color.red())
+                    log_embed.add_field(name="Fechado por", value=f"<@{staff_id}> (Web)")
+                    if creator_id: log_embed.add_field(name="Criador", value=f"<@{creator_id}>")
+                    
+                    if log_channel_id:
+                        log_channel = channel.guild.get_channel(int(log_channel_id))
+                        if log_channel:
+                            await log_channel.send(embed=log_embed, file=file)
+                            
+                    # Mandar pro user
+                    creator = channel.guild.get_member(creator_id) or bot.get_user(creator_id)
+                    if creator:
+                        try:
+                            transcript.seek(0)
+                            user_file = discord.File(transcript, filename=f"transcript-{channel.name}.html")
+                            await creator.send("🎫 O seu ticket de suporte foi encerrado. Aqui está o transcrito.", file=user_file)
+                        except:
+                            pass
+                            
+                    await db.close_ticket(channel_id, staff_id)
+                    import asyncio
+                    asyncio.create_task(channel.delete())
+                except Exception as e:
+                    print(f"Erro ao fechar ticket pela web: {e}")
+                    
+        return jsonify({'ok': True})
+        
+    return jsonify({'erro': 'Ação inválida'}), 400
+
+
 # ── Logs do Sistema ──────────────────────────────────────────────────────────
 
 @app.route('/admin/logs')

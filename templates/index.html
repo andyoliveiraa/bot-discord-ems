@@ -7,6 +7,7 @@
       <h3>EMS Atlas</h3>
     </div>
     <ul class="nav-links">
+      {% if session.get('is_admin') %}<li><a href="/tickets"><i class="fas fa-ticket-alt"></i> Tickets Web</a></li>{% endif %}
       <li><a href="/" class="active"><i class="fas fa-home"></i> Visão Geral</a></li>
       <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
       {% if is_direcao %}<li><a href="/admin/pontos-abertos"><i class="fas fa-eye"></i> Pontos Abertos</a></li>{% endif %}
@@ -97,3 +98,4 @@
   </main>
 </div>
 {% endblock %}
+

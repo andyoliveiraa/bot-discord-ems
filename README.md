@@ -18,7 +18,14 @@ Sistema profissional de gestão de funcionários e registo de horas (ponto) para
 - **Visão Geral:** Ranking Top 10, estimativa de pagamento e horas semanais da semana corrente.
 - **Meus Pontos:** Histórico detalhado por dia com visualização de pausas, duração de cada turno e tipo de fecho.
 - **Pontos Abertos (Admin):** Monitorização em tempo real de todos os pontos ativos da equipa, com cronómetro ao vivo.
+- **Painel de Tickets Web (NOVO):** Acesso total para Staff responder a tickets, assumir, encerrar e visualizar histórico (com mensagens e embeds) sincronizado em tempo real com o Discord, a partir do navegador.
 - **Rastreamento de IPs (Segurança):** Registo do IP real e dispositivo de quem acede (compatível com Cloudflare) com notificação ao Dono via Discord.
+
+### 🎫 Sistema de Tickets Premium (NOVO)
+- **Painel Interativo Discord:** Criação de tickets com formulários detalhados (Modais) separados por categorias (Suporte, Denúncia, Recrutamento, etc.).
+- **Staff Online Scanner:** Quando um ticket é criado, o sistema detecta ativamente e exibe a disponibilidade da equipa de administração que se encontra "Online" no servidor e notifica-os.
+- **Integração Total Web & Discord:** Ferramentas de controlo de tickets (Assumir, Fechar, Apagar) funcionais via botões no Discord e no Dashboard Web.
+- **Transcritos Nativos (HTML):** Gerador profissional de transcritos em modo Dark Theme (semelhante ao UI do Discord), guardados no painel, enviados para os logs e entregues em DM ao membro, evitando dependências de sistemas externos.
 
 ### 💶 Financeiro, Arquivamento e PDF
 - **Arquivamento Semanal:** Encerra a semana, arquivando todos os pontos e criando registos de pagamento por funcionário.
@@ -88,6 +95,11 @@ O sistema baseia-se num ficheiro `config.json` e num ficheiro de base de dados S
 - `/ranking` — Top 10 de horas trabalhadas na semana atual (exibe Nº Func. e Nome).
 - `/autocorrecao` — Força a auto-correção de nomes e apelidos de todos os membros do Discord conforme os registos da base de dados (removendo siglas e callsigns dos nicks no Discord).
 - `/resetarsenha @user` — Gera um novo link de redefinição de senha para o Dashboard em nome da Direção.
+- `/ticket_painel` — Cria a mensagem principal interativa para a abertura de tickets no servidor.
+- `/ticket_config` — Configura a Categoria, Logs e Cargo de Suporte para o módulo de tickets.
+- `/ticket_online` — Exibe publicamente todo o staff de suporte que está atualmente online.
+- `/ticket_stats` — Visualiza contagem e estatísticas dos tickets assumidos/abertos em tempo real.
+- `/add_user` / `/remove_user` / `/rename_ticket` — Comandos de gestão dentro de um ticket ativo.
 - `/resetar_todos` — Painel interativo para limpar e apagar dados gerais (usar com cuidado).
 
 ---

@@ -8,6 +8,7 @@
             <h3>EMS Atlas</h3>
         </div>
         <ul class="nav-links">
+      {% if session.get('is_admin') %}<li><a href="/tickets"><i class="fas fa-ticket-alt"></i> Tickets Web</a></li>{% endif %}
             <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
             <li><a href="/admin" class="active"><i class="fas fa-user-shield"></i> Painel Staff</a></li>
             <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
@@ -40,3 +41,4 @@
     </main>
 </div>
 {% endblock %}
+

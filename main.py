@@ -33,6 +33,7 @@ except RuntimeError:
 client = commands.Bot(command_prefix=".", help_command=None, intents=discord.Intents().all())
 client.config = config # Permite acesso fácil à config pelo bot e dashboard
 client.load_extension('ponto')
+client.load_extension('tickets')
 
 # Sincroniza config inicial com o módulo ponto
 try:

@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-layout">
+  <nav class="sidebar">
+    <div class="logo-container-small">
+      <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+      <h3>EMS Atlas</h3>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
+      <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
+      {% if is_direcao %}<li><a href="/admin/pontos-abertos"><i class="fas fa-eye"></i> Pontos Abertos</a></li>{% endif %}
+      {% if is_direcao %}<li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>{% endif %}
+      <li><a href="/tickets" class="active"><i class="fas fa-ticket-alt"></i> Tickets Web</a></li>
+      <li><a href="/planilha" target="_blank"><i class="fas fa-file-invoice-dollar"></i> Planilha Pública</a></li>
+      <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+    </ul>
+  </nav>
+
+  <main class="main-content" style="display:flex; flex-direction:column; height: 100vh; overflow:hidden;">
+    <header class="dashboard-header" style="flex: 0 0 auto;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <a href="/tickets" style="color: var(--muted); font-size: 1.2rem; text-decoration: none;"><i class="fas fa-arrow-left"></i></a>
+          <h2>Ticket <span class="highlight">#{{ ticket[0] | string | truncate(6, True, '') }}</span></h2>
+        </div>
+        <p class="subtitle">A visualizar histórico e detalhes.</p>
+      </div>
+      <div>
+        {% if ticket[5] != 'closed' %}
+          {% if ticket[5] != 'claimed' %}
+          <button class="btn-primary" onclick="actionTicket('claim')"><i class="fas fa-user"></i> Assumir</button>
+          {% endif %}
+          <button class="btn-danger" onclick="actionTicket('close')"><i class="fas fa-lock"></i> Encerrar</button>
+        {% else %}
+          <span class="badge badge-danger" style="font-size: 1rem; padding: 0.5rem 1rem;">Encerrado</span>
+        {% endif %}
+      </div>
+    </header>
+
+    <div style="display:flex; gap:1.5rem; flex: 1 1 auto; overflow: hidden; padding-bottom:1.5rem;">
+      <!-- Sidebar Detalhes do Ticket -->
+      <div style="flex: 0 0 300px; display:flex; flex-direction:column; gap:1.5rem; overflow-y:auto;">
+        <section class="card">
+          <h4 style="margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;"><i class="fas fa-info-circle highlight"></i> Detalhes</h4>
+          
+          <div style="margin-bottom: 1rem;">
+            <span style="color:var(--muted); font-size:0.85rem; display:block;">Criador</span>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:0.3rem;">
+              <img src="{{ ticket[1] | get_avatar }}" style="width:24px; border-radius:50%;"> 
+              <span>{{ ticket[1] }}</span>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1rem;">
+            <span style="color:var(--muted); font-size:0.85rem; display:block;">Categoria</span>
+            <span class="badge" style="margin-top:0.3rem;">{{ ticket[2] }}</span>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <span style="color:var(--muted); font-size:0.85rem; display:block;">Assunto</span>
+            <div style="margin-top:0.3rem;">{{ ticket[3] }}</div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <span style="color:var(--muted); font-size:0.85rem; display:block;">Estado</span>
+            <div style="margin-top:0.3rem;">
+              {% if ticket[5] == 'open' %}<span class="badge" style="background:#5865F2;">Aberto</span>
+              {% elif ticket[5] == 'claimed' %}<span class="badge badge-ok">Em Atendimento</span>
+              {% else %}<span class="badge badge-danger">Fechado</span>{% endif %}
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <span style="color:var(--muted); font-size:0.85rem; display:block;">Aberto em</span>
+            <div style="margin-top:0.3rem;">{{ ticket[7] | timestamp_semana }} às {{ ticket[7] | timestamp_fmt }}</div>
+          </div>
+          
+          {% if ticket[5] == 'closed' %}
+          <div>
+            <span style="color:var(--muted); font-size:0.85rem; display:block;">Fechado em</span>
+            <div style="margin-top:0.3rem;">{{ ticket[8] | timestamp_semana }} às {{ ticket[8] | timestamp_fmt }}</div>
+          </div>
+          {% endif %}
+        </section>
+      </div>
+
+      <!-- Chat Principal -->
+      <div style="flex: 1; display:flex; flex-direction:column; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); overflow:hidden;">
+        <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight:bold;">
+          <i class="fas fa-comments text-primary"></i> Chat do Ticket
+        </div>
+        
+        <div id="chatContainer" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
+          {% if not mensagens %}
+            <div style="text-align:center; color:var(--muted); margin-top:3rem;">
+              <i class="fas fa-info-circle fa-3x" style="margin-bottom:1rem; opacity:0.5;"></i>
+              <p>O ticket está vazio ou não foi possível carregar as mensagens.</p>
+            </div>
+          {% endif %}
+
+          {% for m in mensagens %}
+          <div style="display:flex; margin-bottom: 1.5rem; gap: 1rem;">
+            <img src="{{ m.author_avatar }}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+            <div style="flex: 1;">
+              <div style="display:flex; align-items:baseline; margin-bottom: 0.2rem;">
+                <span style="font-weight: bold; margin-right: 0.5rem; color: {% if m.is_bot %}#5865F2{% else %}#fff{% endif %};">{{ m.author_name }}</span>
+                {% if m.is_bot %}<span class="badge" style="background:#5865F2; padding: 0.1rem 0.3rem; font-size: 0.65rem; margin-right:0.5rem;">APP</span>{% endif %}
+                <span style="font-size: 0.75rem; color: var(--muted);">{{ m.created_at | timestamp_fmt }}</span>
+              </div>
+              <div style="color: #dcddde; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; font-size: 0.95rem;">{{ m.content }}</div>
+              
+              {% for embed in m.embeds %}
+              <div style="margin-top: 0.5rem; background: #2f3136; border-left: 4px solid #5865F2; padding: 1rem; border-radius: 4px; max-width: 600px;">
+                {% if embed.author %}
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; font-size:0.85rem; color:#fff; font-weight:bold;">
+                  {% if embed.author.icon_url %}<img src="{{ embed.author.icon_url }}" style="width:20px; border-radius:50%;">{% endif %}
+                  {{ embed.author.name }}
+                </div>
+                {% endif %}
+                {% if embed.title %}<div style="color: #fff; font-weight: bold; margin-bottom: 0.5rem;">{{ embed.title }}</div>{% endif %}
+                {% if embed.description %}<div style="color: #dcddde; font-size: 0.9rem; white-space: pre-wrap;">{{ embed.description }}</div>{% endif %}
+                
+                {% if embed.fields %}
+                <div style="display:flex; flex-wrap:wrap; gap: 1rem; margin-top: 0.8rem;">
+                  {% for field in embed.fields %}
+                  <div style="min-width: 45%;">
+                    <div style="color: #fff; font-size: 0.85rem; font-weight: bold; margin-bottom: 0.2rem;">{{ field.name }}</div>
+                    <div style="color: #dcddde; font-size: 0.85rem; white-space: pre-wrap;">{{ field.value }}</div>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        
+        {% if ticket[5] != 'closed' %}
+        <div style="padding: 1rem; background: rgba(255,255,255,0.02); border-top: 1px solid rgba(255,255,255,0.05);">
+          <form onsubmit="sendMessage(event)" style="display: flex; gap: 10px;">
+            <input type="text" id="replyInput" class="form-input" style="flex: 1;" placeholder="Conversar em #{{ ticket[0] | string | truncate(6, True, '') }}..." required>
+            <button type="submit" class="btn-primary"><i class="fas fa-paper-plane"></i></button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+#chatContainer::-webkit-scrollbar { width: 8px; }
+#chatContainer::-webkit-scrollbar-track { background: transparent; }
+#chatContainer::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+#chatContainer::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+</style>
+
+<script>
+window.onload = function() {
+    var container = document.getElementById("chatContainer");
+    if(container) container.scrollTop = container.scrollHeight;
+}
+
+function sendMessage(e) {
+    e.preventDefault();
+    var input = document.getElementById("replyInput");
+    if(!input.value.trim()) return;
+    
+    var formData = new FormData();
+    formData.append('mensagem', input.value);
+    
+    input.disabled = true;
+    
+    fetch('/api/ticket/{{ ticket[0] }}/reply', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.ok) {
+            window.location.reload();
+        } else {
+            alert('Erro ao enviar: ' + data.erro);
+            input.disabled = false;
+        }
+    })
+    .catch(err => {
+        alert('Erro de conexão');
+        input.disabled = false;
+    });
+}
+
+function actionTicket(action) {
+    if(action === 'close' && !confirm("Tem a certeza que deseja encerrar este ticket?")) return;
+    
+    var formData = new FormData();
+    formData.append('action', action);
+    
+    fetch('/api/ticket/{{ ticket[0] }}/action', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.ok) {
+            if(action === 'close') window.location.href = '/tickets';
+            else window.location.reload();
+        } else {
+            alert('Erro: ' + data.erro);
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-layout">
+  <nav class="sidebar">
+    <div class="logo-container-small">
+      <img src="https://cdn.discordapp.com/icons/1494047594425487390/bfe0c28a29962936e5b35eedc3b51b64.png?size=2048" alt="Logo" class="logo-small">
+      <h3>EMS Atlas</h3>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><i class="fas fa-home"></i> Visão Geral</a></li>
+      <li><a href="/meus-pontos"><i class="fas fa-clock"></i> Meus Pontos</a></li>
+      {% if is_direcao %}<li><a href="/admin/pontos-abertos"><i class="fas fa-eye"></i> Pontos Abertos</a></li>{% endif %}
+      {% if is_direcao %}<li><a href="/admin/definicoes"><i class="fas fa-cogs"></i> Administração</a></li>{% endif %}
+      <li><a href="/tickets" class="active"><i class="fas fa-ticket-alt"></i> Tickets Web</a></li>
+      <li><a href="/planilha" target="_blank"><i class="fas fa-file-invoice-dollar"></i> Planilha Pública</a></li>
+      <li><a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+    </ul>
+  </nav>
+
+  <main class="main-content">
+    <header class="dashboard-header">
+      <div>
+        <h2>Painel de <span class="highlight">Tickets Premium</span></h2>
+        <p class="subtitle">Faça a gestão dos tickets de suporte do servidor em tempo real.</p>
+      </div>
+    </header>
+
+    <section class="card" style="margin-bottom:1.5rem;">
+      <h3 style="margin-bottom:1rem;"><i class="fas fa-fire text-warning"></i> Tickets Ativos & Assumidos</h3>
+      
+      {% if ativos %}
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        {% for t in ativos %}
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; flex: 1; min-width: 250px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.location.href='/ticket/{{ t[0] }}'">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <div>
+              {% if t[5] == 'claimed' %}
+              <span style="color: #43b581; font-weight: bold;"><i class="fas fa-user-check"></i> Em Atendimento</span>
+              {% else %}
+              <span style="color: #5865F2; font-weight: bold;"><i class="fas fa-envelope"></i> Aberto</span>
+              {% endif %}
+            </div>
+            <span class="badge" style="background: #202225;">#{{ t[0] | string | truncate(6, True, '') }}</span>
+          </div>
+          <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">{{ t[3] }}</div>
+          <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.25rem;">Criado por: <img src="{{ t[1] | get_avatar }}" style="width:16px; border-radius:50%; vertical-align:middle;"> {{ t[1] }}</div>
+          <div style="font-size: 0.75rem; color: var(--muted);">{{ t[6] | timestamp_fmt }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="text-align: center; padding: 2rem; color: var(--muted);">
+        <i class="fas fa-check-circle" style="font-size: 3rem; color: #43b581; margin-bottom: 1rem;"></i>
+        <p>Nenhum ticket ativo no momento. Excelente trabalho!</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h3 style="margin-bottom:1rem;"><i class="fas fa-history highlight"></i> Histórico Recente</h3>
+      <div class="table-container">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Criador</th>
+              <th>Assunto</th>
+              <th>Estado</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in todos %}
+            {% if t[5] == 'closed' %}
+            <tr>
+              <td>{{ t[0] }}</td>
+              <td><img src="{{ t[1] | get_avatar }}" class="avatar-table" style="vertical-align:middle;"> {{ t[1] }}</td>
+              <td>{{ t[3] }}</td>
+              <td><span class="badge badge-danger">Fechado</span></td>
+              <td>
+                <a href="/ticket/{{ t[0] }}" class="btn-primary" style="padding: 0.4rem 0.8rem; text-decoration:none;"><i class="fas fa-eye"></i> Visualizar</a>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+{% endblock %}
