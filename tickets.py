@@ -417,8 +417,9 @@ class Tickets(commands.Cog):
             color=discord.Color.from_rgb(47, 49, 54) # Cor premium estilo Discord
         )
         embed.set_footer(text="A nossa equipa está pronta para ajudar.")
-        embed.set_image(url="https://i.imgur.com/8zX0942.png") # Uma linha divisória elegante ou deixe em branco se não carregar
-        
+        if ctx.guild.icon:
+            embed.set_thumbnail(url=ctx.guild.icon.url)
+
         await ctx.send(embed=embed, view=TicketPanelButtons(self.bot))
         await ctx.respond("✅ Painel criado com sucesso!", ephemeral=True)
 
