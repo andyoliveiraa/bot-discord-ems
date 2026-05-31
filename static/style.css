@@ -529,6 +529,12 @@ body {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     scrollbar-width: thin;
     scrollbar-color: var(--accent-blue) transparent;
+    position: relative;
+    z-index: 2;
+}
+
+.table-container:hover {
+    z-index: 40;
 }
 
 .table-container::-webkit-scrollbar {
@@ -557,10 +563,12 @@ body {
 
 .modern-table tbody tr {
     transition: background-color 0.2s ease;
+    position: relative;
 }
 
 .modern-table tbody tr:hover {
-    background-color: rgba(255, 255, 255, 0.02);
+    background-color: rgba(255, 255, 255, 0.05);
+    z-index: 30;
 }
 
 .modern-table th {
@@ -628,6 +636,12 @@ body {
     border-radius: 24px;
     padding: 32px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 1;
+}
+
+.card:hover {
+    z-index: 50;
 }
 
 .card h3 {
