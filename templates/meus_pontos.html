@@ -153,6 +153,10 @@
           <input type="number" id="modal-minutos" class="form-input" min="0" max="59" value="0">
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label>Motivo</label>
+        <input type="text" id="modal-motivo" class="form-input" placeholder="Escreva o motivo da alteração">
+      </div>
     </div>
 
     <div style="display:flex;gap:.75rem;">
@@ -183,6 +187,7 @@ function abrirModalOld(id, durSeg) {
   document.getElementById('modal-mode-duration').style.display = 'block';
   document.getElementById('modal-horas').value = 0;
   document.getElementById('modal-minutos').value = 0;
+  document.getElementById('modal-motivo').value = '';
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
@@ -201,6 +206,7 @@ async function confirmarEdicao() {
     fd.append('action', document.getElementById('modal-action').value);
     fd.append('horas', document.getElementById('modal-horas').value);
     fd.append('minutos', document.getElementById('modal-minutos').value);
+    fd.append('motivo', document.getElementById('modal-motivo').value || 'Não especificado');
   }
   
   var res = await fetch('/api/ponto/' + pontoAtivo + '/editar', {method: 'POST', body: fd});

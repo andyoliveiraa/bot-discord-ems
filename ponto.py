@@ -537,7 +537,9 @@ class PicaPonto(commands.Cog):
         await db.add_time(usuario.id, total)
         
         agora = int(datetime.datetime.now(obter_timezone()).timestamp())
-        await db.create_registry(usuario.id, agora, agora, 2, total, "[]")
+        import json
+        pauses_info = json.dumps({"staff": ctx.author.id, "staff_nome": ctx.author.display_name, "motivo": motivo})
+        await db.create_registry(usuario.id, agora, agora, 2, total, pauses_info)
 
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você adicionou `{horas}` horas e `{minutos}` minutos para {usuario.mention}.')
         try:
@@ -567,7 +569,9 @@ class PicaPonto(commands.Cog):
         await db.del_time(usuario.id, total)
         
         agora = int(datetime.datetime.now(obter_timezone()).timestamp())
-        await db.create_registry(usuario.id, agora, agora, 3, -total, "[]")
+        import json
+        pauses_info = json.dumps({"staff": ctx.author.id, "staff_nome": ctx.author.display_name, "motivo": motivo})
+        await db.create_registry(usuario.id, agora, agora, 3, -total, pauses_info)
 
         await ctx.respond(f'<a:check:1269034091882221710> Sucesso! Você removeu `{horas}` horas e `{minutos}` minutos de {usuario.mention}.')
         try:

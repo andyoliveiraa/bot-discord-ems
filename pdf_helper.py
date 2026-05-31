@@ -270,8 +270,19 @@ async def _construir_pdf(dados_funcs, inicio_str, fim_str, gerado_em, semana_id,
                     pdf.set_fill_color(220, 255, 220)
                     pdf.set_font("Arial", 'B', 9)
                     pdf.multi_cell(190, 6, _enc(f"  [AJUSTE POSITIVO por Staff] em {dt_in_str}"), fill=True, new_x='LMARGIN', new_y='NEXT')
+                    
+                    staff_id_str = ""
+                    motivo_str = ""
+                    if isinstance(pausas, dict) and "staff" in pausas:
+                        staff_nome = pausas.get('staff_nome')
+                        if staff_nome:
+                            staff_id_str = f" {staff_nome} (ID: {pausas.get('staff')})"
+                        else:
+                            staff_id_str = f" ID: {pausas.get('staff')}"
+                        motivo_str = f"\n    Motivo: {pausas.get('motivo', 'Não especificado')}"
+                        
                     _linha_multi(pdf,
-                        f"    Staff adicionou manualmente {_fmt_dur(duration)} de trabalho a este funcionario.",
+                        f"    Staff{staff_id_str} adicionou manualmente {_fmt_dur(duration)} de trabalho a este funcionario.{motivo_str}",
                         cor=(0, 100, 0), tamanho=8)
                     _linha(pdf, f"    Horas adicionadas: +{_fmt_dur(duration)}  ({duration}s)", cor=(0, 120, 0), tamanho=9)
                     pdf.ln(2)
@@ -282,8 +293,19 @@ async def _construir_pdf(dados_funcs, inicio_str, fim_str, gerado_em, semana_id,
                     pdf.set_fill_color(255, 220, 220)
                     pdf.set_font("Arial", 'B', 9)
                     pdf.multi_cell(190, 6, _enc(f"  [AJUSTE NEGATIVO por Staff] em {dt_in_str}"), fill=True, new_x='LMARGIN', new_y='NEXT')
+                    
+                    staff_id_str = ""
+                    motivo_str = ""
+                    if isinstance(pausas, dict) and "staff" in pausas:
+                        staff_nome = pausas.get('staff_nome')
+                        if staff_nome:
+                            staff_id_str = f" {staff_nome} (ID: {pausas.get('staff')})"
+                        else:
+                            staff_id_str = f" ID: {pausas.get('staff')}"
+                        motivo_str = f"\n    Motivo: {pausas.get('motivo', 'Não especificado')}"
+                        
                     _linha_multi(pdf,
-                        f"    Staff removeu manualmente {_fmt_dur(abs(duration))} de trabalho a este funcionario.",
+                        f"    Staff{staff_id_str} removeu manualmente {_fmt_dur(abs(duration))} de trabalho a este funcionario.{motivo_str}",
                         cor=(150, 0, 0), tamanho=8)
                     _linha(pdf, f"    Horas removidas: {_fmt_dur(duration)}  ({duration}s)", cor=(180, 0, 0), tamanho=9)
                     pdf.ln(2)
