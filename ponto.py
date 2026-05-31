@@ -1445,6 +1445,24 @@ class PicaPonto(commands.Cog):
         embed_confirmar.set_footer(text='Tens 30 segundos para confirmar.')
         await ctx.respond(embed=embed_confirmar, view=BotoesSemana(top_filtrado, reset=False), ephemeral=True)
 
+    @commands.slash_command(name='pdf_detalhado', description='[ADM] Gera um PDF ultra-detalhado da semana ATUAL (sem encerrar).', contexts={discord.InteractionContextType.guild})
+    @has_staff_role()
+    async def pdf_detalhado(self, ctx: discord.ApplicationContext):
+        await ctx.defer(ephemeral=True)
+        from pdf_helper import gerar_pdf_detalhado_ativa
+        try:
+            pdf_path = await gerar_pdf_detalhado_ativa(db, config, ctx.guild)
+            if pdf_path:
+                await ctx.respond(
+                    content='📄 **Relatório Detalhado da Semana Ativa (Gerado a Pedido):**',
+                    file=discord.File(pdf_path),
+                    ephemeral=True
+                )
+            else:
+                await ctx.respond('⚠️ Não há dados ou erro ao gerar o PDF.', ephemeral=True)
+        except Exception as e:
+            await ctx.respond(f'❌ Erro ao gerar PDF detalhado: `{e}`', ephemeral=True)
+
     @commands.slash_command(name='resetarsemana', description='[ADM] Encerra a semana: mostra relatório, backup e reseta tudo.', contexts={discord.InteractionContextType.guild})
     @has_staff_role()
     async def resetarsemana(self, ctx: discord.ApplicationContext):

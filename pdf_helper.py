@@ -113,7 +113,16 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
             "pontos": pontos or [],
         })
 
-    # ── Criar PDF ──────────────────────────────────────────────────────────────
+    
+    return await _construir_pdf(dados_funcs, inicio_str, fim_str, gerado_em, str(semana_id), tz_obj)
+
+async def _construir_pdf(dados_funcs, inicio_str, fim_str, gerado_em, semana_id, tz_obj):
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+
+# ── Criar PDF ──────────────────────────────────────────────────────────────
     pdf = FPDF()
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -423,3 +432,75 @@ async def gerar_pdf_detalhado(db, config_atual, semana_id, inicio, fim):
     file_path = f"relatorio_semana_{semana_id}.pdf"
     await asyncio.to_thread(pdf.output, file_path)
     return file_path
+
+async def gerar_pdf_detalhado_ativa(db, config_atual, guild=None):
+    """
+    Gera PDF detalhado da semana ATIVA sem fechar.
+    """
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+        
+    tz_cfg = config_atual.get('timezone', 'UTC')
+    from pytz import timezone
+    import datetime
+    tz_obj = timezone(tz_cfg)
+    
+    semana_ativa = await db.get_semana_activa()
+    inicio_str = datetime.datetime.fromtimestamp(semana_ativa[1], tz_obj).strftime('%d/%m/%Y') if semana_ativa else 'Desconhecido'
+    fim_str = 'ATIVA'
+    gerado_em = datetime.datetime.now(tz_obj).strftime('%d/%m/%Y as %H:%M')
+    
+    ranking = await db.get_ranking(amount=500)
+    
+    dados_funcs = []
+    for user_data in ranking:
+        user_id = user_data[0]
+        total_seg = user_data[1]
+        
+        func_db = await db.get_funcionario(user_id)
+        if func_db:
+            nome_func = f"[{func_db[1]}] {func_db[2]}"
+            cargo_id = func_db[0]
+            patente_info = config_atual.get("cargos_patentes", {}).get(cargo_id, {})
+            cargo_nome = patente_info.get("nome", cargo_id)
+            valor_hora = patente_info.get("valor_hora", 0)
+        else:
+            if guild:
+                membro = guild.get_member(user_id)
+                nome_func = membro.display_name if membro else f"ID: {user_id}"
+            else:
+                nome_func = f"ID: {user_id}"
+            cargo_nome = "Desconhecido"
+            valor_hora = 0
+            
+        # Pega os pontos da semana ativa (com ID, como o arquivo espera)
+        pontos = await db.get_all_user_registries_with_id(user_id)
+        if not pontos and total_seg == 0:
+            continue
+            
+        # Calcula valor registado simulado (não existe na BD porque ainda não encerrou)
+        # O _construir_pdf também recalcula o valor exato no final, portanto podemos mandar 0 ou a estimativa
+        abs_func = abs(total_seg)
+        th = int(abs_func // 3600)
+        tm = int((abs_func % 3600) // 60)
+        total_min = th * 60 + tm
+        pagamento_calc = (total_min / 60) * valor_hora * (-1 if total_seg < 0 else 1)
+        
+        dados_funcs.append({
+            "user_id": user_id,
+            "nome_func": nome_func,
+            "cargo_nome": cargo_nome,
+            "valor_hora": valor_hora,
+            "valor_registado": pagamento_calc,
+            "pago": 0,
+            "pago_em": None,
+            "pago_por": None,
+            "pontos": pontos or [],
+        })
+        
+    if not dados_funcs:
+        return None
+        
+    return await _construir_pdf(dados_funcs, inicio_str, fim_str, gerado_em, "ATIVA", tz_obj)
